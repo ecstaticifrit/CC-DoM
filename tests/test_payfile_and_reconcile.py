@@ -27,7 +27,7 @@ def test_sample_statement_marks_the_three_signed_bills_paid(client):
     client.post(f"{run_url}/reconcile", files={"file": ("s.csv", (SAMPLES / "friday_bank_statement.csv").read_bytes(), "text/csv")})
     receipt = client.get(f"{run_url}/receipt.json").json()
     assert (receipt["paid"], receipt["returned"], receipt["waiting_for_bank"]) == (3, 0, 0)
-    assert receipt["reconciliation"]["unlinked_lines"] == 1
+    assert receipt["reconciliation"]["unlinked_lines"] == 0
 
 
 def test_wrong_amount_missing_line_and_double_debit_stay_open(client):

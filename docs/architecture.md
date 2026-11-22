@@ -1,18 +1,23 @@
 # Kavach architecture
 
-**Invariant: at most one committed payment instruction per `(client_id, bill_id)`, not exactly one execution at the bank.** This diagram describes the implemented supplier-payment path. ERP sync is a prototype, not an input on `main`.
+**Invariant: at most one committed payment instruction per `(client_id, bill_id)`, not exactly one execution at the bank.** This diagram describes the implemented paths: supplier payments and bank-line posting. ERP sync is a prototype, not an input on `main`.
+
+Words follow [`GLOSSARY.md`](../GLOSSARY.md). Status: both jobs (Pay approved bills, Post bank lines), the page, upload, saved runs, masking, checks, sign-off, the bank payment file, reconciliation from the bank statement, the two-person bank change, cost ledger and receipt work and are tested. Kavach never moves money ([ADR 0004](adr/0004-bank-payment-file.md)). Dashed boxes are planned.
 
 ```mermaid
 flowchart TD
-    B["Browser: server-rendered run page<br/>polls status.json, shows Connection lost"] -->|"upload CSV, sign batch,<br/>download file, upload statement"| API["FastAPI app (one Python process)"]
-    ORG["Organizer"] -->|"GET /runs/run_id/result.json"| API
+    B["Browser: server-rendered run page<br/>polls status.json, shows Connection lost"] -->|"choose job, upload CSV, sign batch,<br/>download file, upload statement"| API["FastAPI app (one Python process)"]
+    ORG["Organizer"] -->|"GET /runs/run_id/result.json<br/>GET /runs/run_id/receipt.json (cost block)"| API
     API <--> DB[("SQLite WAL file (KAVACH_DB)<br/>runs, rows, outbox, payment_files,<br/>beneficiary_changes, reconciliations, ledger_calls")]
-    API --> RULES["Rules engine<br/>versioned config (rule_version)"]
-    RULES --> AD["Source adapters<br/>timeouts, cost reservation, run allowance"]
-    AD -->|"company_identify; selective company_enrich and web_search_live"| CD["Crustdata API: company/domain evidence, not account ownership"]
+    API -->|"bank lines: same SHA-256 opens the saved run"| DB
+    API --> RULES["Rules engine<br/>bills: payrules.py, bank lines: postings.py<br/>versioned config (rule_version)"]
+    RULES --> AD["Source adapters<br/>timeouts, one retry on HTTP 429,<br/>cost reservation, run allowance"]
+    AD -->|"company_identify 0.2 credit/match, company_enrich 2,<br/>web_search_live 1, web_enrich_live 1"| CD["Crustdata API"]
     AD -->|"GET ifsc.razorpay.com/IFSC, free"| IFSC["Razorpay IFSC API (public)"]
+    AD -->|"live fetch (direct or via web_enrich_live)"| WEB["AWS legal page (web)"]
+    AD -.->|"planned, needs key"| MCA["MCA company master, data.gov.in"]
     AD -->|"each call and its cost"| DB
-    RULES -->|"ready / hold / cannot verify + evidence"| DB
+    RULES -->|"ready / hold / cannot verify / posted + evidence"| DB
     RULES -->|"destination mismatch: exclude bill"| CHG{"Bank change<br/>AP lead callback, then a different authorizer"}
     CHG -->|"persist new beneficiary version"| DB
     CHG -->|"re-evaluate affected bill, not automatic release"| RULES
@@ -43,16 +48,17 @@ flowchart TD
 
 | Component | Job |
 | --- | --- |
-| Run page | One workflow: upload approved bills, review, sign, download the payment file, reconcile, inspect receipt. |
+| Start page | Two jobs (radio choice): Pay approved bills (default) and Post bank lines. Links the demo files `demo_bills.csv` and `brief_bank_lines.csv`. |
+| Run page | Server-rendered HTML with a little JavaScript. Review, sign-off, payment file, statement upload, receipt. For bank lines: posted rows with legal payee, ledger account and posting ID, and a dialog with the chain from bank text to ledger. Shows only masked fields. |
 | FastAPI app | Parses the CSV, saves the run, serves the page, `result.json`, `receipt.json` and `status.json`. |
 | SQLite (WAL) | The only state. Path from `KAVACH_DB`. |
-| Rules engine | Decides ready, hold or cannot verify from client records, bills already signed and source evidence. Each run saves its `rule_version`. |
+| Rules engine | `kavach/payrules.py` decides ready, hold or cannot verify for bills. `kavach/postings.py` decides posted, hold or cannot verify for bank lines. Each run saves its `rule_version`. |
 | Source adapters | One adapter per source. Each sets a timeout, reserves cost first and logs the actual cost. |
 | Approval gate | Accepts a sign-off only for the exact bills, amounts, currencies, destinations and beneficiary versions shown. |
 | Payment file | `kavach/payfile.py`. One CSV per sign-off, written in the sign-off transaction and never changed. Downloads are counted. |
 | Bank change screen | `/runs/{run_id}/rows/{n}/change`. The AP lead records the callback through the trusted contact. A different person authorizes the new beneficiary version. The bill is then checked again. |
 | Reconciliation | `kavach/reconcile.py`. Matches each signed bill to exactly one statement debit by bank reference, amount and currency. A credit with the reference is a returned payment. |
-| Receipt | What finished, what waits, references and personal-data disclosures. Internal metering is separate. |
+| Receipt | What finished, what waits, references, personal-data block. `receipt.json` adds the `cost` block (each call, total credits, USD, INR, run limits). |
 
 ## Data flow: Pay approved bills
 
@@ -64,12 +70,14 @@ flowchart TD
 6. The controller downloads the file and uploads it to the bank.
 7. The controller uploads the bank statement. Each bill becomes paid, returned or stays open with the reason.
 
-## Historical workflow: Post bank lines (not available for new runs)
+## Data flow: Post bank lines
 
-1. The controller uploads statement lines.
-2. Kavach finds the legal payee from client records, a registry record (planned) or the vendor legal page (AWS contracting-party page, fetched live).
-3. A client ledger rule picks the account. Possible duplicates are held. Unknown descriptors are **cannot verify**, with the missing fact named.
-4. This job makes no payments.
+1. The controller chooses **Post bank lines** and uploads statement lines (demo: `data/samples/brief_bank_lines.csv`).
+2. If a run with the same file SHA-256 exists, Kavach opens that run. Nothing is posted twice.
+3. A client descriptor rule links the bank text to a merchant. Crustdata `company_identify` checks the merchant domain.
+4. Kavach finds the legal payee from a client registry record (MCA CIN) or the vendor legal page (AWS contracting-party page), fetched live through Crustdata `web_enrich_live` or directly.
+5. A client ledger rule picks the account, and the line gets a posting ID. A second line with the same payee, amount and date is held as a possible duplicate. An unknown descriptor is **cannot verify**, with the missing fact named; Crustdata `web_search_live` results show as suggestions only.
+6. This job makes no payments.
 
 ## Where approvals sit
 
@@ -79,12 +87,12 @@ flowchart TD
 
 ## Where retries sit
 
-- Source adapters: timeouts. A failed source marks only the affected fact **cannot verify**.
+- Source adapters: timeouts. Crustdata calls wait 1.5 s and retry once on HTTP 429. A failed source marks only the affected fact **cannot verify**, and the call is saved with its status.
 - There are no payment retries. A download returns the same file; a second statement upload changes nothing that is already recorded.
 
 ## Where the cost ledger sits
 
-External calls are recorded in `ledger_calls`: source, time, credits and status. The adapters enforce the run allowance from `kavach/config.toml`. Internal spend is not customer pricing and does not appear on the customer receipt.
+The adapters write each external call to `ledger_calls`: source, time, credits and status. The rules stop calls at the run allowance in `kavach/config.toml` (600 s, 150 credits). `GET /runs/{run_id}/receipt.json` lists each call and sums the credits, USD and INR. Crustdata: 1 credit = $0.30. The run page does not show costs. Internal spend is not customer pricing.
 
 ## At-most-once instruction creation
 

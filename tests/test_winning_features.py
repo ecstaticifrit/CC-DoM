@@ -15,9 +15,31 @@ def test_bank_change_with_mismatched_domain_corroborates_with_crustdata(client):
     receipt = client.get(f"{run_url}/receipt.json").json()
     assert {c["adapter"] for c in receipt["this_run"]["live_checks"]} >= {
         "crustdata.company_identify", "crustdata.company_enrich", "crustdata.web_search_live"}
-    for surface in (str(receipt), str(result), client.get(run_url).text):
+    for surface in (str(result), client.get(run_url).text):
         for internal in ("cost_credits", "crustdata_credits", "sponsored", "kavach_cost_inr", "fee_inr", "Data checks cost"):
             assert internal not in surface
+
+
+def test_receipt_json_records_the_cost_of_each_call_for_organizers(client):
+    run_url = upload(client, "pay_bills", (SAMPLES / "friday_bills.csv").read_text()).headers["location"]
+    cost = client.get(f"{run_url}/receipt.json").json()["cost"]
+    assert cost["calls"] and all({"adapter", "status", "credits"} <= set(c) for c in cost["calls"])
+    assert cost["total_credits"] == round(sum(c["credits"] for c in cost["calls"]), 2)
+    assert {"usd", "inr"} <= set(cost) and cost["limits"]["run_credits"] == 150
+    assert "total_credits" not in client.get(run_url).text
+
+
+def test_reuploading_renamed_bank_statement_replays_saved_run_and_posting_ids(client):
+    text = (SAMPLES / "brief_bank_lines.csv").read_text()
+    first = upload(client, "post_lines", text, filename="october.csv").headers["location"]
+    second = upload(client, "post_lines", text, filename="october-copy.csv").headers["location"]
+    assert second == first
+
+    rows = client.get(f"{first}/result.json").json()["rows"]
+    posting_ids = [r["posting"]["posting_id"] for r in rows if r["posting"]]
+    assert len(posting_ids) == 2
+    assert len(set(posting_ids)) == 2
+    assert all(pid.startswith("post_") for pid in posting_ids)
 
 
 def test_no_statement_upload_until_a_payment_file_has_been_signed(client):

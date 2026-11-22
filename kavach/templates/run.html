@@ -79,7 +79,7 @@
 <section class="run-head form-sheet" data-run-id="{{ run.run_id }}" data-updated="{{ run.updated_at }}">
   <div class="form-title">
     <div>
-      <span class="lbl form-kind">Payment control note · {{ "bill payments" if run.mode == "pay_bills" else "bank postings" }}</span>
+      <span class="lbl form-kind">{{ "Payment control note · bill payments" if run.mode == "pay_bills" else "Control note · bank postings" }}</span>
       <h1>{{ mode_label }}</h1>
     </div>
     <span class="form-no">No. {{ run.run_id }}</span>
@@ -528,7 +528,7 @@
   <h2>Run receipt</h2>
   <div class="receipt-grid">
     <div class="receipt-block">
-      <h3>Payment outcomes</h3>
+      <h3>{{ "Payment outcomes" if run.mode == "pay_bills" else "Posting outcomes" }}</h3>
       <dl class="facts">
         <dt>Held</dt><dd>{{ receipt.held }} (Rs {{ receipt.held_total }})</dd>
         {% if run.mode == "pay_bills" %}

@@ -2,7 +2,7 @@
 
 "One carrier changed its bank account. Why should every other carrier miss Friday's payment? Kavach holds that bill, gets the rest ready for your sign-off, and gives you a receipt showing where every rupee went or why it is still waiting."
 
-Track: Buying and paying. Kavach never moves money: it writes a bank payment file that the controller uploads to the bank. All data in this repo is test data. Shared words are in [`GLOSSARY.md`](GLOSSARY.md). Decisions are in [`docs/adr/`](docs/adr/).
+Track: Buying and paying. Kavach does two jobs: **Pay approved bills** and **Post bank lines**. Kavach never moves money: it writes a bank payment file that the controller uploads to the bank. All data in this repo is test data. Shared words are in [`GLOSSARY.md`](GLOSSARY.md). Decisions are in [`docs/adr/`](docs/adr/).
 
 **Status labels in this file.** "Working" means the team tested it. "Not done at freeze" lists what is missing. Kavach does not claim anything works until a test or the live demo shows it.
 
@@ -17,6 +17,7 @@ For the Speed Post bill sample, see [dataset provenance](data/SOURCES.md). Price
 3. Prepare an exact clean batch for the controller to sign.
 4. Generate a frozen bank payment file without adding a second instruction for the same bill.
 5. Reconcile the signed bills against the bank statement.
+6. Post bank lines: find the legal payee and the ledger account for each bank line. Hold possible duplicates. Mark unknown payees **Cannot verify**.
 
 **Who does it today.** In-house AP (accounts payable) staff, outsourced payables desks, and freight payment firms such as Cass Information Systems.
 
@@ -26,16 +27,17 @@ For the Speed Post bill sample, see [dataset provenance](data/SOURCES.md). Price
 
 ## What it does now
 
-**Input.** Start with a bill CSV. The statement belongs to that same run after sign-off.
+**Input.** Choose a job on the start page and upload a CSV file. For bills, the bank statement belongs to the same run after sign-off.
 
-| Job | Columns |
-| --- | --- |
-| Pay approved bills | `bill_id, carrier_id, carrier_name, amount, currency, account_number, ifsc, sender_email` (`sender_email` optional) |
-| Reconcile a signed run | `date, description, amount, currency, reference, type` (`type` defaults to debit; use credit for a return) |
+| Job | Columns | Demo file |
+| --- | --- | --- |
+| Pay approved bills | `bill_id, carrier_id, carrier_name, amount, currency, account_number, ifsc, sender_email` (`sender_email` optional) | `data/samples/demo_bills.csv` |
+| Reconcile a signed run (on the run page) | `date, description, amount, currency, reference, type` (`type` defaults to debit; use credit for a return) | `data/samples/demo_bank_statement.csv` |
+| Post bank lines | `date, description, amount, currency, reference` | `data/samples/brief_bank_lines.csv` |
 
 **Working (tested):**
 
-- The start page accepts approved supplier bills and identifies the logistics examples as demo data.
+- The start page offers two jobs: **Pay approved bills** (default) and **Post bank lines**. It links both demo files.
 - You upload a CSV. A bad file gets a readable error. The error never repeats input values.
 - Each run is saved in SQLite (WAL mode) and has a stable URL (`/runs/{run_id}`). After a restart, the same URL shows the same run. You do not upload again.
 - A row with a missing required value stays visible as **Cannot verify**, and the page names the missing field.
@@ -52,14 +54,15 @@ For the Speed Post bill sample, see [dataset provenance](data/SOURCES.md). Price
   - Sender email domain differs from the carrier's recorded domain → **Review**, never an accusation. When `CRUSTDATA_API_KEY` is set, Crustdata `company_identify` corroborates the recorded domain.
   - The controller ticks ready bills, sees "Approve N bills for Rs X" with exact bills, destinations and beneficiary versions, and signs. The server rechecks each bill's fingerprint. Held or changed bills cannot be sent.
   - Sign-off and the **bank payment file** are written in one SQLite transaction ([ADR 0004](docs/adr/0004-bank-payment-file.md)). Each bill gets one bank reference (`KV` + bill ID) and is in exactly one line of one file, ever. The file is frozen: every download returns the same bytes and SHA-256, also after a restart. Downloads are counted. Uploading the same bills again shows **Already signed earlier** and creates no new line.
-- Each run enforces internal credit and time limits. When a required check cannot finish, independent bills can still proceed.
-- *Run receipt* (`/runs/{id}/receipt.json` and on the page): held, signed, paid per bank, waiting and returned counts; the personal data used, how it is masked, the retention policy, payment-file downloads and the person-lookup count from the call log (zero). Every external call and its credit cost is saved in the `ledger_calls` table; the demo screens do not show metering.
+- *Post bank lines.* For each line, Kavach links the bank text to a merchant (client descriptor rule), checks the merchant domain with Crustdata `company_identify`, finds the legal payee (client registry record, or the vendor legal page fetched live through Crustdata `web_enrich_live` or directly), and applies the client ledger rule. A posted line gets a posting ID. A second line with the same payee, amount and date is **Held: possible duplicate**. A line that no source links to a payee is **Cannot verify**; Kavach runs a Crustdata `web_search_live` and shows the results as suggestions only. Uploading the same statement again (same SHA-256, any file name) opens the saved run with the same posting IDs.
+- Each run enforces a time limit and a credit limit (`kavach/config.toml`: 600 s, 150 credits). When a required check cannot finish, independent bills can still proceed.
+- *Run receipt* (`/runs/{id}/receipt.json` and on the page): held, signed, paid per bank, waiting and returned counts; the personal data used, how it is masked, the retention policy, payment-file downloads and the person-lookup count from the call log (zero). Every external call and its credit cost is saved in the `ledger_calls` table. `receipt.json` has a `cost` block: each call (adapter, status, credits, time), total credits, USD and INR, and the run limits. The HTML page does not show the cost block.
 
 **Working (tested):**
 
 - *Reconciliation.* Upload the bank statement CSV on the run page. A bill is **paid** only when exactly one debit carries its bank reference with the same amount and currency. Two debits → open as a possible double payment by the bank. A different amount or no debit → open with the reason. Uploading the same statement again changes nothing.
 - *Returned payment.* A credit line with the bill's bank reference reopens the bill as **Reopened: payment returned**, with an owner and next step.
-- *Two-person bank change.* On a **Held: bank account changed** bill, **Record callback and authorization** opens a screen. The AP lead records the callback through the trusted contact. A different person authorizes the new beneficiary version. The bill is then checked again against every rule, including bills already signed. A denied callback keeps the bill held as a possible fraud attempt. Names are typed; there are no user logins yet.
+- *Two-person bank change.* On a **Held: bank account changed** bill, **Record callback and approval** opens a dialog. The AP lead records the callback through the trusted contact. A different person authorizes the new beneficiary version. The bill is then checked again against every rule, including bills already signed. A denied callback keeps the bill held as a possible fraud attempt. Names are typed; there are no user logins yet.
 - *Change after sign-off.* The file never changes after sign-off. If a carrier's beneficiary changes later, the file shows **Do not upload this file as it is** and names the bill.
 - *Value block.* The run page starts with "What Kavach did in this run": bills checked and how long it took, clean bills ready, money held (not counted as savings), exceptions with an owner, and bills paid twice (including double debits found on the statement).
 
@@ -67,7 +70,7 @@ For the Speed Post bill sample, see [dataset provenance](data/SOURCES.md). Price
 
 - The payment file uses a generic CSV layout. Each bank (for example ICICI, HDFC) has its own bulk-upload format; the layout is set per client at onboarding.
 - Kavach cannot see whether the controller uploaded the file. The bank statement is the only proof of payment.
-- MCA registry integration needs a data.gov.in key; the Swiggy payee cites the MCA record from client records.
+- MCA registry integration needs a data.gov.in key; the Swiggy payee cites the MCA record (CIN) held in client records. That record has no link and no record date in the output.
 
 **Finished result.** A run receipt and `result.json` with, for each row: the outcome (ready, held, cannot verify, signed, paid per bank, returned, posted), the evidence, the owner and next step for each exception, and bank references, payment file IDs or posting IDs.
 
@@ -75,6 +78,7 @@ For the Speed Post bill sample, see [dataset provenance](data/SOURCES.md). Price
 
 - Five bills (three clean, one possible duplicate, one changed account): three ready for sign-off, two held with reasons, no payment file before sign-off, exactly three payment-file lines with three distinct bank references after sign-off.
 - Upload the bills twice, sign, kill the process. Restart: the same file (same SHA-256), still exactly three lines, no fourth payment.
+- The organizers' four bank lines (`brief_bank_lines.csv`): Swiggy → posted, Swiggy Limited, staff meals. AWS EMEA → posted, Amazon Web Services EMEA SARL, cloud hosting. The second identical AWS line → **Held: possible duplicate**. PAYTM*SHARMA TRD → **Cannot verify**. Nothing is guessed.
 
 **Where it still needs a person:**
 
@@ -135,7 +139,8 @@ Full diagram and the exactly-once procedure: [`docs/architecture.md`](docs/archi
 - **State:** one SQLite file in WAL mode. Set the path with `KAVACH_DB`. Tables: `runs`, `rows` (with evidence and decisions), `outbox` (signed bills, bank references, file IDs, paid or returned per statement), `payment_files` (frozen file bytes, SHA-256, download count), `beneficiary_changes`, `reconciliations` and `ledger_calls` (every external call and its cost). The browser and `result.json` read the same rows.
 - **Agents and models:** no LLM in v1. The inputs are structured (CSV), so parsers extract the fields and rules decide. A model would only be added to read unstructured invoices or emails, and it would never decide or send anything.
 - **Tools and data:** source adapters with timeouts, retries and cost reservation call Crustdata, the Razorpay IFSC API (public, no key) and the vendor's legal page. Rules have a version (`kavach/config.toml`, `rule_version`), and every run saves the version it used.
-- **Where it calls Crustdata:** `company_identify` in the Pay approved bills job. It corroborates the carrier's recorded web domain. Kavach compares domains by exact equality only. Kavach never uses a name-only match.
+- **Where it calls Crustdata:** Pay approved bills: `company_identify` corroborates the carrier's recorded web domain; on a bank change, `company_enrich` and `web_search_live` add the company profile and recent news. Post bank lines: `company_identify` for the merchant domain, `web_enrich_live` to fetch the vendor legal page, and `web_search_live` for an unknown payee (suggestions only). Kavach compares domains by exact equality only. Kavach never uses a name-only match.
+- **Logs:** the server log is the uvicorn access log (method, path, status). It holds no account numbers or emails. Every external call is in the `ledger_calls` table and in `receipt.json`.
 
 ## Its sources and checks
 
@@ -143,7 +148,8 @@ Full diagram and the exactly-once procedure: [`docs/architecture.md`](docs/archi
 | --- | --- | --- | --- |
 | Client records (approved beneficiary versions, payment history, trusted contacts, ledger rules, onboarding records) | The approved destination, past payments, who to call back, which ledger account | That a new bank account is genuine | Rs 0 |
 | Razorpay IFSC API (`https://ifsc.razorpay.com/<IFSC>`, no key) | The IFSC code exists and names a bank branch | Who owns the account | Rs 0 |
-| Crustdata `company_identify` | A company directory entry agrees with the carrier's recorded domain | That the sender is who they claim; a lookalike domain only triggers review | 0.2 credit per match ($0.06) |
+| Crustdata `company_identify` | A company directory entry agrees with the carrier's or merchant's recorded domain | That the sender is who they claim; a lookalike domain only triggers review | 0.2 credit per match ($0.06) |
+| Crustdata `company_enrich` and `web_search_live` | Company profile and recent public pages for a carrier with a bank change; search results for an unknown payee | Who owns a bank account; search results never name a payee | 2 credits; 1 credit per page |
 | Vendor legal page (AWS contracting-party page, fetched live) | The legal entity name, quoted exactly (for example, Amazon Web Services EMEA SARL) | That this charge belongs to that entity, without a link from the statement or a client record | Rs 0 direct fetch; 1 credit ($0.30) if fetched through Crustdata `web_enrich_live` |
 | MCA company master data, data.gov.in (planned) | The registered `CompanyName` of an Indian company | That the company was the payee of this charge | Free with key (not integrated) |
 | Bank statement (uploaded CSV) | A debit with the bill's bank reference, amount and currency left the account; a credit with it came back | That the account belongs to the carrier | Rs 0 |
@@ -152,7 +158,7 @@ Crustdata pricing on our pay-as-you-go account: 1 credit = $0.30 (dashboard). Ot
 
 **Where a person approves:** the controller signs the exact batch (bills, amounts, destinations, beneficiary versions). The AP lead records the callback. A separate authorizer approves a beneficiary change. An edit after sign-off voids the approval for that item only.
 
-**Internal metering:** Kavach saves adapter calls and their costs in SQLite. Customer receipts show payment outcomes and source evidence, not internal expenses.
+**Cost ledger:** Kavach saves each adapter call and its cost in SQLite. `GET /runs/{run_id}/receipt.json` shows the `cost` block. The run page shows payment outcomes and source evidence, not internal expenses.
 
 ## The approaches you tried
 
@@ -178,7 +184,7 @@ Link: <add before submission>
 
 Two-minute storyboard:
 
-Use one file: `data/samples/demo_bills.csv` (also linked on the start page). Do one warm-up run first, and wait a minute between runs (Crustdata rate limit).
+Use `data/samples/demo_bills.csv` for bills and `data/samples/brief_bank_lines.csv` for bank lines (both linked on the start page). Do one warm-up run first, and wait a minute between runs (Crustdata rate limit).
 
 | Bill | What it shows | Outcome |
 | --- | --- | --- |
@@ -194,4 +200,6 @@ Use one file: `data/samples/demo_bills.csv` (also linked on the start page). Do 
 3. **0:50 Two people.** On D-204, select **Record callback and approval** to show the two-step check. (You can stop at step 1.)
 4. **1:05 Sign.** Tick D-201 to D-203, select **Review and sign**, then press and hold. The SIGNED stamp lands on the payment file.
 5. **1:25 Kill and restart.** Stop the server, start it again, refresh. Same run, same file, same SHA-256, 3 lines.
-6. **1:45 Receipt.** Show the personal-data block: masked accounts, zero person lookups, download count.
+6. **1:35 Statement.** Upload `demo_bank_statement.csv` on the run page. The 3 signed bills show **Paid**.
+7. **1:45 Bank lines.** Start a new run, choose **Post bank lines**, upload `brief_bank_lines.csv`. Swiggy and AWS are posted; the second AWS line is held as a possible duplicate; line 4 is **Cannot verify**. Upload the same file again under a new name: the same run opens.
+8. **1:55 Receipt.** Show the personal-data block: masked accounts, zero person lookups, download count.

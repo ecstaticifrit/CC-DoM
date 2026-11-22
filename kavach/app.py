@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from kavach import payrules, reconcile
+from kavach import payrules, postings, reconcile
 from kavach.config import load_config
 from kavach.intake import FORMATS, IntakeError, _row, parse
 from kavach.masking import mask_account
@@ -64,7 +64,7 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
 
     @app.get("/samples/{filename}")
     def sample_file(filename: str):
-        allowed = {"demo_bills.csv", "demo_bank_statement.csv", "friday_bills.csv", "friday_bank_statement.csv", "public_tariff_bills.csv"}
+        allowed = {"demo_bills.csv", "demo_bank_statement.csv", "brief_bank_lines.csv", "friday_bills.csv", "friday_bank_statement.csv", "public_tariff_bills.csv"}
         if filename not in allowed:
             raise HTTPException(404, "Sample not found")
         path = HERE.parent / "data" / "samples" / filename
@@ -74,8 +74,8 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
 
     @app.post("/runs")
     async def create_run(request: Request, mode: str = Form("pay_bills"), run_credits: str = Form(""), file: UploadFile | None = None):
-        if mode != "pay_bills":
-            return templates.TemplateResponse(request, "start.html", ctx(error="Start with approved carrier bills. To check a bank statement, open its signed run."), status_code=400)
+        if mode not in MODES:
+            return templates.TemplateResponse(request, "start.html", ctx(error="Choose a job: Pay approved bills or Post bank lines."), status_code=400)
         live_config = load_config()
         data = await file.read() if file else b""
         try:
@@ -83,13 +83,20 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
         except IntakeError as err:
             return templates.TemplateResponse(request, "start.html", ctx(error=str(err)), status_code=400)
         input_hash = hashlib.sha256(data).hexdigest()
+        if mode == "post_lines":
+            existing = store.find_run_by_hash("post_lines", input_hash)
+            if existing:
+                return RedirectResponse(f"/runs/{existing}", status_code=303)
         try:
             cap = min(float(live_config["limits"]["run_credits"]), float(run_credits)) if run_credits.strip() else float(live_config["limits"]["run_credits"])
         except ValueError:
             cap = float(live_config["limits"]["run_credits"])
         budgeted = BudgetedSources(sources, max_credits=max(0.0, cap), max_seconds=float(live_config["limits"]["run_seconds"]))
         started = time.monotonic()
-        rows = evaluate_bills(rows, budgeted)
+        if mode == "pay_bills":
+            rows = evaluate_bills(rows, budgeted)
+        else:
+            rows = postings.evaluate_lines(rows, current_records(), budgeted.fetch_page_text, sources=budgeted)
         run_id = store.create_run(mode, live_config["rule_version"], rows, input_hash=input_hash, allowance_credits=cap,
                                   eval_ms=int((time.monotonic() - started) * 1000))
         return RedirectResponse(f"/runs/{run_id}", status_code=303)
@@ -349,7 +356,18 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
 
     @app.get("/runs/{run_id}/receipt.json")
     def receipt(run_id: str):
-        return _receipt(_run_or_404(run_id))
+        run = _run_or_404(run_id)
+        rate = config["costs"]
+        credits = sum(c["cost_credits"] for c in run["calls"])
+        cap = run["allowance_credits"] if run.get("allowance_credits") is not None else config["limits"]["run_credits"]
+        return {**_receipt(run), "cost": {
+            "limits": {"run_credits": cap, "run_seconds": config["limits"]["run_seconds"]},
+            "calls": [{"adapter": c["adapter"], "status": c["status"], "credits": c["cost_credits"], "at": c["at"]} for c in run["calls"]],
+            "total_credits": round(credits, 2),
+            "usd": round(credits * rate["usd_per_credit"], 2),
+            "inr": round(credits * rate["usd_per_credit"] * rate["inr_per_usd"], 2),
+            "rate": f"1 credit = USD {rate['usd_per_credit']}; USD 1 = INR {rate['inr_per_usd']} ({rate['rate_date']})",
+        }}
 
     @app.get("/runs/{run_id}/status.json")
     def status(run_id: str):

@@ -1,10 +1,11 @@
 from conftest import bills_csv, upload
 
 
-def test_start_page_has_one_bill_upload_with_budget_and_sandbox_label(client):
+def test_start_page_offers_both_jobs_with_pricing_and_sandbox_label(client):
     page = client.get("/").text
-    assert "Upload approved supplier bills" in page
-    assert 'name="mode"' not in page and "Post bank lines" not in page
+    assert 'name="mode" value="pay_bills" checked' in page and 'name="mode" value="post_lines"' in page
+    assert "Pay approved bills" in page and "Post bank lines" in page
+    assert "/samples/demo_bills.csv" in page and "/samples/brief_bank_lines.csv" in page
     assert "Credit limit" not in page and "per bill" in page
     assert "Sandbox" in page
 

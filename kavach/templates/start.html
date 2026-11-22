@@ -7,7 +7,7 @@
 </ol>
 
 <h1>Start a payment run</h1>
-<p class="lead">Upload approved supplier bills when you're ready to pay. Review changed accounts and possible duplicates without delaying the rest.</p>
+<p class="lead">Upload approved supplier bills to make a payment file, or upload bank lines to post them to your ledger. Kavach holds changed accounts, possible duplicates and unknown payees. The other items do not wait.</p>
 
 {% if error %}
 <div class="banner banner-err" role="alert">
@@ -18,8 +18,28 @@
 
 <div class="start-grid">
   <form class="start-form" method="post" action="/runs" enctype="multipart/form-data">
+    <fieldset class="field-group">
+      <legend>1. Choose a job</legend>
+      <div class="mode-list">
+        <label class="mode-option">
+          <input type="radio" name="mode" value="pay_bills" checked>
+          <span>
+            <span class="mode-title">{{ modes.pay_bills }}</span>
+            <span class="mode-desc">Check each bill for changed bank accounts, duplicates, IFSC codes and unknown sender domains. Then sign the clean bills.</span>
+          </span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="post_lines">
+          <span>
+            <span class="mode-title">{{ modes.post_lines }}</span>
+            <span class="mode-desc">Find the legal payee and ledger account for each bank line. Hold duplicates and unknown payees. This job makes no payments.</span>
+          </span>
+        </label>
+      </div>
+    </fieldset>
+
     <div class="field-group">
-      <span class="field-label">Upload approved supplier bills (CSV)</span>
+      <span class="field-label">2. Upload a CSV file</span>
       <label class="dropzone">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#12355B" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
         <span class="dropzone-title">Drop a CSV file here, or select one</span>
@@ -30,28 +50,33 @@
     </div>
 
     <div class="allowance-row">
-      <span>Pricing is per bill. No charges in this demo.</span>
+      <span>Pricing is per bill.</span>
       <span><strong>Mode:</strong> Sandbox, test data only</span>
     </div>
 
-    <button class="btn" type="submit">Review bills</button>
+    <button class="btn" type="submit">Check this file</button>
   </form>
 
   <aside class="guide">
     <h2>Quick start</h2>
     <ol>
-      <li>Upload the approved bills and review any holds.</li>
-      <li>Sign the clean bills to generate the payment file for your bank. Kavach never sends money.</li>
-      <li>After payment, return to this run with the bank statement to confirm what cleared.</li>
+      <li>Choose a job and upload a CSV file. Then review any holds.</li>
+      <li>Bills: sign the clean bills to make the payment file for your bank. Kavach never sends money.</li>
+      <li>Bills: after payment, upload the bank statement on the same run to confirm what cleared.</li>
+      <li>Bank lines: each supported line gets a legal payee, a ledger account and a posting ID.</li>
     </ol>
 
-    <h2>Demo file</h2>
+    <h2>Demo files</h2>
     <ul class="sample-links">
-      <li><a href="/samples/demo_bills.csv" download>demo_bills.csv</a> — 8 test bills that show every check: 3 clean, a changed bank account, a lookalike sender, a possible duplicate, a missing account number and an unknown carrier.</li>
+      <li><a href="/samples/demo_bills.csv" download>demo_bills.csv</a> (Pay approved bills): 8 test bills that show every check: 3 clean, a changed bank account, a lookalike sender, a possible duplicate, a missing account number and an unknown carrier.</li>
+      <li><a href="/samples/brief_bank_lines.csv" download>brief_bank_lines.csv</a> (Post bank lines): 4 bank lines. Swiggy, AWS, a second identical AWS line and an unknown payee.</li>
     </ul>
 
     <h2>Columns the CSV needs</h2>
-    <code class="cols-code" data-expected-cols>bill_id, carrier_id, carrier_name, amount, currency, account_number, ifsc, sender_email</code>
+    <p class="mode-desc">Pay approved bills:</p>
+    <code class="cols-code">bill_id, carrier_id, carrier_name, amount, currency, account_number, ifsc, sender_email</code>
+    <p class="mode-desc">Post bank lines:</p>
+    <code class="cols-code">date, description, amount, currency, reference</code>
   </aside>
 </div>
 {% endblock %}

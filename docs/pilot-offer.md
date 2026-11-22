@@ -6,7 +6,6 @@ Ticket: `.scratch/friday-payment-run/issues/15-measure-pilot-offer.md`. Words fo
 
 **Per bill, whenever a payment run is needed.** Agree the unit price and what counts as billable (including holds and repeat uploads) before a paid pilot. The demo does not charge.
 
-- Bank transfer fees are separate. The client's bank charges them directly.
 - There is no charge per alert or external lookup.
 
 ## 2. Who does what

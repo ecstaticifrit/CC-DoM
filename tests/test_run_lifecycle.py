@@ -56,6 +56,25 @@ def test_organizer_result_agrees_with_the_page(client):
     assert "Cannot verify: missing amount" in page
 
 
+def test_organizer_result_agrees_with_the_page_for_bank_lines(client):
+    run_url = upload(client, "post_lines",
+        "date,description,amount,currency,reference\n"
+        "2026-10-03,RAZ*SWIGGY BLR,1240,INR,\n"
+        "2026-10-09,PAYTM*SHARMA TRD,,INR,\n",
+    ).headers["location"]
+    result = client.get(f"{run_url}/result.json").json()
+    page = client.get(run_url).text
+
+    assert result["run_id"] in page
+    assert result["mode"] == "post_lines"
+    outcomes = {r["item_ref"]: (r["outcome"], r["missing"]) for r in result["rows"]}
+    assert outcomes == {
+        "line 1": ("posted", []),
+        "line 2": ("cannot_verify", ["amount"]),
+    }
+    assert "Cannot verify: missing amount" in page
+
+
 def test_status_reports_the_last_update_time_for_reconnecting_pages(client):
     run_url = upload(client, "pay_bills", bills_csv(
         "C-501,CAR-1,Blue Dart,1500,INR,123456781234,HDFC0000053,",
