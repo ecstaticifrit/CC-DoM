@@ -186,11 +186,42 @@
       sign.showModal();
       sign.querySelector("[data-sign-submit]").focus();
     });
-    sign.querySelector("form").addEventListener("submit", () => {
-      const btn = sign.querySelector("[data-sign-submit]");
-      btn.disabled = true;
-      btn.textContent = "Signing…";
+    // Hold to sign: the fill is a progress indicator, so it runs linear; release snaps back.
+    const hold = sign.querySelector("[data-sign-submit]");
+    const holdLabel = hold.querySelector("[data-hold-label]");
+    const holdMs = Number(hold.dataset.holdMs || 1200);
+    hold.style.setProperty("--hold-ms", `${holdMs}ms`);
+    let holdTimer = null;
+    const finishHold = () => {
+      hold.classList.remove("is-holding");
+      hold.classList.add("is-done");
+      holdLabel.textContent = "Signing…";
+      sign.querySelector("form").submit();
+    };
+    const startHold = () => {
+      if (hold.classList.contains("is-done")) return;
+      hold.classList.add("is-holding");
+      holdLabel.textContent = "Keep holding…";
+      holdTimer = setTimeout(finishHold, holdMs);
+    };
+    const cancelHold = () => {
+      if (hold.classList.contains("is-done")) return;
+      clearTimeout(holdTimer);
+      hold.classList.remove("is-holding");
+      holdLabel.textContent = "Hold to sign";
+    };
+    hold.addEventListener("pointerdown", e => {
+      if (e.button !== 0) return;
+      hold.setPointerCapture(e.pointerId);
+      startHold();
     });
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach(ev => hold.addEventListener(ev, cancelHold));
+    hold.addEventListener("keydown", e => {
+      if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); startHold(); }
+    });
+    hold.addEventListener("keyup", e => { if (e.key === " " || e.key === "Enter") cancelHold(); });
+    hold.addEventListener("contextmenu", e => e.preventDefault());
+    sign.addEventListener("close", () => { hold.classList.remove("is-done"); cancelHold(); });
   }
 
   // Keep the page in step with the server; never reload while a dialog is open.

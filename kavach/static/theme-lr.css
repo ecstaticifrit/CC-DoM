@@ -1,0 +1,265 @@
+/* Kavach visual world: the consignment note (lorry receipt).
+   Form paper, carbon-blue print, boxed fields with small labels, rubber-stamp verdicts.
+   Loaded after app.css; it re-points the semantic tokens and restyles components. */
+
+:root {
+  --p-paper-50: #f6f8fb;
+  --p-paper-100: #e9edf4;
+  --p-paper-200: #dde3ed;
+  --p-paper-300: #c3cbda;
+  --p-white: #ffffff;
+  --p-ink-900: #18213a;
+  --p-ink-700: #37405a;
+  --p-ink-500: #5d6478;
+  --p-indigo-700: #26399a;   /* carbon-copy blue */
+  --p-indigo-800: #1b2a78;
+  --p-indigo-100: #e9ecf8;
+  --p-indigo-200: #c4cbec;
+  --p-jade-700: #1d6a3a;     /* stamp green */
+  --p-jade-100: #e8f3eb;
+  --p-jade-200: #b8d9c2;
+  --p-ochre-700: #8a5600;
+  --p-ochre-100: #fbf1db;
+  --p-ochre-200: #ebd3a0;
+  --p-crimson-700: #b0261c;  /* stamp red */
+  --p-crimson-100: #fbebe8;
+  --p-crimson-200: #eec2bb;
+  --p-teal-700: #0e6a70;     /* Crustdata: a second ink */
+  --p-teal-100: #e4f3f3;
+  --p-teal-200: #b3dcdd;
+
+  --live-fg: var(--p-teal-700);
+  --live-bg: var(--p-teal-100);
+  --live-border: var(--p-teal-200);
+
+  --rule: rgba(38, 57, 154, 0.22);
+  --rule-strong: rgba(38, 57, 154, 0.5);
+  --border-subtle: var(--rule);
+
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+
+  --font-form: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+html { background: var(--p-paper-100); }
+::selection { background: var(--p-indigo-200); color: var(--p-ink-900); }
+:focus-visible { outline: 2px solid var(--p-indigo-700); outline-offset: 2px; }
+
+/* Form labels: the small print above every box */
+.lbl,
+.summary-item dt,
+.ledger thead th,
+.compare thead th,
+.next dt,
+.chain-label,
+.dlg-ref,
+.facts dt,
+.field-group legend,
+.field-label,
+.statuskey,
+.check-result {
+  font-family: var(--font-form);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--p-indigo-700);
+}
+
+h1, h2, .dlg-title {
+  font-family: var(--font-form);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--p-ink-900);
+}
+h1 { font-size: 1.9rem; text-transform: uppercase; letter-spacing: 0.01em; }
+
+/* Masthead */
+.top { background: var(--p-paper-50); border-bottom: 2px solid var(--p-indigo-700); }
+.brand-mark path:first-child { fill: var(--p-indigo-700); }
+.brand-name { font-family: var(--font-form); text-transform: uppercase; letter-spacing: 0.08em; color: var(--p-indigo-800); }
+.brand-sub { font-family: var(--font-form); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.72rem; color: var(--p-indigo-700); border-left-color: var(--rule-strong); }
+.sandbox-pill { border-radius: var(--radius-sm); background: transparent; border: 1px dashed var(--rule-strong); color: var(--p-indigo-800); font-family: var(--font-form); text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.7rem; }
+
+/* Steps read like the form's tear-off counterfoil numbering */
+.steps { border-bottom: 1px dashed var(--rule-strong); }
+.step-num { border-radius: var(--radius-sm); font-family: var(--font-form); }
+
+/* The form sheet: header fields in a boxed grid */
+.form-sheet {
+  background: var(--p-white);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-lg);
+  margin: 0 0 1.25rem;
+  box-shadow: 0 1px 0 var(--p-paper-300), 0 12px 28px -20px rgba(24, 33, 58, 0.35);
+}
+.form-title {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  padding: 1rem 1.25rem 0.85rem;
+  border-bottom: 1px solid var(--rule-strong);
+}
+.form-title h1 { margin: 0; line-height: 1; }
+.form-kind { display: block; margin-bottom: 0.35rem; }
+.form-no { font-family: var(--font-mono); font-size: 0.95rem; color: var(--p-crimson-700); font-weight: 600; letter-spacing: 0.02em; }
+.formfields {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  margin: 0;
+}
+.formfields > div { padding: 0.55rem 1.25rem 0.65rem; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); min-width: 0; }
+.formfields dt { margin-bottom: 0.2rem; }
+.formfields dd { margin: 0; font-size: 0.9rem; font-weight: 600; color: var(--p-ink-900); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.formfields dd code { font-family: var(--font-mono); font-size: 0.84rem; }
+.form-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; padding: 0.75rem 1.25rem; }
+
+/* Key figures: boxed, like the totals block at the foot of an LR */
+.summary-strip { border: 0; padding: 0; gap: 0; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
+.summary-item { padding: 0.65rem 1.25rem 0.75rem; border-right: 1px solid var(--rule); }
+.summary-item:last-child { border-right: 0; }
+.summary-item dd { font-family: var(--font-mono); font-size: 1.1rem; font-weight: 600; }
+
+/* Run summary as the counterfoil: perforation along the top edge */
+.run-summary {
+  position: relative;
+  background: var(--p-white);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-lg);
+  padding-top: 1.35rem;
+}
+.run-summary::before {
+  content: ""; position: absolute; left: 0.75rem; right: 0.75rem; top: 0.55rem; height: 0;
+  border-top: 2px dotted var(--rule-strong);
+}
+.run-summary h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.statusbar { border-radius: 0; height: 10px; gap: 2px; }
+.seg-ok { background: var(--p-jade-700); }
+.seg-held { background: var(--p-crimson-700); }
+.seg-signed { background: var(--p-indigo-700); }
+.dot { border-radius: 1px; }
+
+/* Rubber stamps */
+.stamp {
+  --stamp: var(--p-indigo-700);
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font-family: var(--font-form); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+  font-size: 0.78rem; line-height: 1;
+  color: var(--stamp);
+  padding: 0.4rem 0.6rem 0.36rem;
+  border: 2px solid var(--stamp);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 2px var(--p-white), inset 0 0 0 3px var(--stamp);
+  transform: rotate(-3deg);
+  background: color-mix(in srgb, var(--stamp) 4%, transparent);
+  white-space: nowrap;
+}
+.stamp-lg { font-size: 1.05rem; padding: 0.55rem 0.85rem 0.5rem; }
+.stamp-ok { --stamp: var(--p-jade-700); }
+.stamp-held { --stamp: var(--p-crimson-700); }
+.stamp-warn { --stamp: var(--p-ochre-700); }
+.stamp-info { --stamp: var(--p-indigo-700); }
+.stamp-muted { --stamp: var(--p-ink-500); }
+.stamp.is-pressing { animation: stamp-press 320ms var(--ease-out) both; }
+@keyframes stamp-press {
+  from { opacity: 0; transform: rotate(-3deg) scale(1.35); }
+  60% { opacity: 1; transform: rotate(-3deg) scale(0.96); }
+  to { opacity: 1; transform: rotate(-3deg) scale(1); }
+}
+
+/* Status pills become small stamps in the table */
+.pill {
+  border-radius: var(--radius-sm);
+  font-family: var(--font-form);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-width: 1.5px;
+  background: transparent !important;
+}
+.status-ready .pill, .status-posted .pill, .status-signed .pill { color: var(--p-jade-700); border-color: var(--p-jade-700); }
+.status-hold_bank_change .pill, .status-reopened_reversed .pill { color: var(--p-crimson-700); border-color: var(--p-crimson-700); }
+.status-hold_possible_duplicate .pill, .status-hold_already_paid .pill, .status-hold_invalid_routing .pill, .status-cannot_verify .pill { color: var(--p-ochre-700); border-color: var(--p-ochre-700); }
+.status-review_sender_domain .pill, .status-already_signed .pill { color: var(--p-indigo-700); border-color: var(--p-indigo-700); }
+.pill svg { display: none; }
+
+/* The bill register: a ruled form grid */
+.table-wrap { background: var(--p-white); border: 1px solid var(--rule-strong); border-radius: var(--radius-lg); }
+.ledger thead th { background: var(--p-paper-50); border-bottom: 1px solid var(--rule-strong); padding-top: 0.65rem; padding-bottom: 0.55rem; }
+.ledger th, .ledger td { border-bottom: 1px solid var(--rule); }
+.ledger td + td, .ledger th + td, .ledger td + th { border-left: 1px solid var(--rule); }
+.ledger tbody th[scope="row"] { font-family: var(--font-mono); color: var(--p-indigo-800); }
+.ledger td.num { font-family: var(--font-mono); font-weight: 600; }
+.row { transition: background-color 120ms ease; }
+.row-held { background: color-mix(in srgb, var(--p-crimson-100) 45%, var(--p-white)); }
+.row-held:hover { background: var(--p-crimson-100); }
+.row:hover { background: var(--p-indigo-100); }
+.row[aria-selected="true"] { background: var(--p-indigo-100); box-shadow: inset 0 0 0 1px var(--p-indigo-700); }
+.ledger input[type="checkbox"], .choice-opt input { accent-color: var(--p-indigo-700); width: 16px; height: 16px; }
+
+/* Buttons: inked, square-shouldered */
+.btn { border-radius: var(--radius-md); font-family: var(--font-form); text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; }
+.btn-sm { font-size: 0.72rem; }
+.btn-secondary { background: var(--p-white); border-color: var(--rule-strong); color: var(--p-indigo-800); }
+.btn-secondary:hover { background: var(--p-indigo-100); border-color: var(--p-indigo-700); color: var(--p-indigo-800); }
+.btn-ghost { border-color: var(--rule-strong); }
+@media (hover: hover) and (pointer: fine) {
+  .btn:not(:disabled):hover { box-shadow: 0 1px 0 var(--p-indigo-800); }
+}
+
+/* Chips and chain */
+.hold-chip { border-radius: var(--radius-sm); background: var(--p-white); font-family: var(--font-form); text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.74rem; }
+.hold-chip-label { text-transform: none; letter-spacing: 0; font-family: var(--font-sans); font-size: 0.8rem; }
+.src { border-radius: var(--radius-sm); font-family: var(--font-form); text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.64rem; }
+.ricon { border-radius: var(--radius-sm); }
+
+/* Dialogs: a carbon copy laid on the desk */
+.dlg { border-radius: var(--radius-lg); background: var(--p-white); border: 1px solid var(--rule-strong); }
+.dlg::backdrop { background: rgba(24, 33, 58, 0.46); backdrop-filter: none; }
+.dlg-head { background: var(--p-paper-50); border-bottom: 2px solid var(--p-indigo-700); align-items: center; }
+.dlg-head-main { display: flex; align-items: center; gap: 1rem; }
+.dlg-amount { font-family: var(--font-mono); }
+.dlg-foot { background: var(--p-paper-50); border-top: 1px solid var(--rule-strong); }
+.dlg-h { font-family: var(--font-form); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.74rem; color: var(--p-indigo-700); }
+.verdict { border-radius: var(--radius-md); background: var(--p-paper-50); border-style: solid; }
+.compare { border: 1px solid var(--rule-strong); }
+.compare th, .compare td { border-bottom: 1px solid var(--rule); }
+.compare tbody th { background: var(--p-paper-50); font-family: var(--font-form); text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.7rem; color: var(--p-indigo-700); border-right: 1px solid var(--rule); }
+.check { border-radius: var(--radius-md); }
+.check-name { font-family: var(--font-form); font-size: 0.92rem; letter-spacing: 0.01em; }
+.stepper li { border-radius: var(--radius-md); }
+.stepper-dot { border-radius: var(--radius-sm); }
+.field input { border-radius: var(--radius-sm); border-color: var(--rule-strong); background: var(--p-paper-50); }
+.choice-opt { border-radius: var(--radius-md); border-color: var(--rule-strong); }
+
+/* Hold to sign: press and hold, the ink fills, the stamp lands */
+.hold-btn { position: relative; overflow: hidden; isolation: isolate; min-width: 15rem; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.hold-btn .hold-fill {
+  position: absolute; inset: 0; z-index: -1;
+  background: var(--p-jade-700);
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 200ms var(--ease-out);
+}
+.hold-btn.is-holding .hold-fill { clip-path: inset(0 0 0 0); transition: clip-path var(--hold-ms, 1200ms) linear; }
+.hold-btn.is-holding { transform: scale(0.98); }
+.hold-btn.is-done .hold-fill { clip-path: inset(0 0 0 0); }
+.hold-hint { font-size: 0.78rem; color: var(--text-muted); margin: 0.3rem 0 0; text-align: right; }
+
+/* Toast in the same ink */
+.toast { background: var(--p-indigo-800); border-radius: var(--radius-md); font-family: var(--font-sans); }
+
+@media (prefers-reduced-motion: reduce) {
+  .stamp.is-pressing { animation: stamp-fade 200ms ease-out both; }
+  .hold-btn.is-holding { transform: none; }
+}
+@keyframes stamp-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 1.75rem 0 0.75rem; }
+.section-head h2 { margin: 0; }
+.receipt h2 { text-transform: uppercase; letter-spacing: 0.04em; font-size: 1.05rem; }
+.receipt-block { border-radius: var(--radius-lg); border-color: var(--rule-strong); }
+.receipt-block h3 { font-family: var(--font-form); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.76rem; color: var(--p-indigo-700); border-bottom-color: var(--rule-strong); }
+.banner { border-radius: var(--radius-md); }
+.signbar { border-radius: var(--radius-md); border-color: var(--rule-strong); }
+.selected { font-family: var(--font-mono); }

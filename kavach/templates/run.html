@@ -21,6 +21,14 @@
 </span>
 {%- endmacro %}
 
+{% set stamps = {
+  "ready": ("Cleared", "ok"), "posted": ("Posted", "ok"), "signed": ("Signed", "info"),
+  "hold_bank_change": ("Held", "held"), "reopened_reversed": ("Reopened", "held"),
+  "hold_possible_duplicate": ("Held", "warn"), "hold_already_paid": ("Held", "warn"), "hold_invalid_routing": ("Held", "warn"),
+  "review_sender_domain": ("Review", "info"), "cannot_verify": ("Cannot verify", "warn"),
+  "already_signed": ("Signed earlier", "muted"), "not_checked": ("Not checked", "muted"),
+} %}
+
 {% macro source_label(ev) -%}
 {%- if ev.source -%}{{ ev.source }}
 {%- elif ev.source_ref and ev.source_ref.startswith("Crustdata") -%}Crustdata
@@ -68,23 +76,19 @@
   {% if has_receipt %}<li class="{% if receipt.signed > 0 or receipt.posted > 0 %}active{% endif %}"><span class="step-num">3</span>{% if run.mode == "pay_bills" %}Sign and pay{% else %}Posted{% endif %}</li>{% endif %}
 </ol>
 
-<section class="run-head" data-run-id="{{ run.run_id }}" data-updated="{{ run.updated_at }}">
-  <div class="run-header">
+<section class="run-head form-sheet" data-run-id="{{ run.run_id }}" data-updated="{{ run.updated_at }}">
+  <div class="form-title">
     <div>
+      <span class="lbl form-kind">Payment control note · {{ "bill payments" if run.mode == "pay_bills" else "bank postings" }}</span>
       <h1>{{ mode_label }}</h1>
-      <div class="run-meta">
-        <span>Run <code>{{ run.run_id }}</code></span>
-        <span>Rules <code>{{ run.rule_version }}</code></span>
-        <span>Updated <time class="updated">{{ run.updated_at }}</time></span>
-      </div>
     </div>
-    <div class="run-actions">
-      <a class="btn btn-secondary btn-sm" href="/">Start a new run</a>
-      <a class="btn btn-secondary btn-sm" href="/runs/{{ run.run_id }}/result.json" download>Download result</a>
-      {% if has_receipt %}<a class="btn btn-secondary btn-sm" href="/runs/{{ run.run_id }}/receipt.json" download>Download receipt</a>{% endif %}
-    </div>
+    <span class="form-no">No. {{ run.run_id }}</span>
   </div>
-
+  <dl class="formfields">
+    <div><dt class="lbl">Rules version</dt><dd><code>{{ run.rule_version }}</code></dd></div>
+    <div><dt class="lbl">Last updated</dt><dd><time class="updated">{{ run.updated_at }}</time></dd></div>
+    <div><dt class="lbl">{{ "Bills" if run.mode == "pay_bills" else "Lines" }}</dt><dd>{{ rows|length }}</dd></div>
+  </dl>
   <dl class="summary-strip">
     {% if has_receipt %}
     <div class="summary-item {% if receipt.held %}is-warn{% endif %}"><dt>Needs attention</dt><dd>{{ receipt.held }} · Rs {{ receipt.held_total }}</dd></div>
@@ -93,13 +97,18 @@
     <div class="summary-item"><dt>Signed / paid per bank</dt><dd>{{ receipt.signed }} / {{ receipt.paid }}</dd></div>
     {% else %}
     <div class="summary-item is-ok"><dt>Posted once</dt><dd>{{ receipt.posted }} of {{ rows|length }}</dd></div>
-    <div class="summary-item"><dt>Payments</dt><dd>None. This job only posts.</dd></div>
+    <div class="summary-item"><dt>Payments</dt><dd>None</dd></div>
     {% endif %}
     {% else %}
     <div class="summary-item"><dt>Rows</dt><dd>{{ rows|length }}</dd></div>
     <div class="summary-item"><dt>Needs attention</dt><dd>{{ rows|selectattr("outcome", "equalto", "cannot_verify")|list|length }}</dd></div>
     {% endif %}
   </dl>
+  <div class="form-actions">
+    <a class="btn btn-secondary btn-sm" href="/">Start a new run</a>
+    <a class="btn btn-secondary btn-sm" href="/runs/{{ run.run_id }}/result.json" download>Download result</a>
+    {% if has_receipt %}<a class="btn btn-secondary btn-sm" href="/runs/{{ run.run_id }}/receipt.json" download>Download receipt</a>{% endif %}
+  </div>
 </section>
 
 {% if has_receipt %}
@@ -255,7 +264,11 @@
       <p class="dlg-ref">{{ row.item_ref }}{% if row.display.carrier %} · {{ row.display.carrier }}{% elif row.display.description %} · <code>{{ row.display.description }}</code>{% endif %}</p>
       <h2 class="dlg-title" id="why-title">{{ labels.get(row.outcome, row.outcome) }}</h2>
     </div>
-    <p class="dlg-amount">Rs {{ row.display.amount }}<span>{{ row.display.currency }}</span></p>
+    <div class="dlg-head-main">
+      {% set st = stamps.get(row.outcome, (row.outcome, "muted")) %}
+      <span class="stamp stamp-lg stamp-{{ st[1] }} is-pressing" aria-hidden="true">{{ st[0] }}</span>
+      <p class="dlg-amount">Rs {{ row.display.amount }}<span>{{ row.display.currency }}</span></p>
+    </div>
   </header>
 
   <div class="dlg-scroll">
@@ -427,7 +440,7 @@
 <dialog class="dlg" id="why-dialog" aria-labelledby="why-title"><div class="dlg-inner"></div></dialog>
 
 {% if can_select %}
-<dialog class="dlg dlg-sign" id="sign-dialog" aria-labelledby="sign-title">
+<dialog class="dlg dlg-sign" id="sign-dialog" aria-labelledby="sign-title" aria-describedby="hold-hint">
   <form method="post" action="/runs/{{ run.run_id }}/approve" class="dlg-inner">
     <header class="dlg-head">
       <div>
@@ -450,7 +463,10 @@
     <footer class="dlg-foot">
       <div class="dlg-actions">
         <button type="button" class="btn btn-secondary" data-close>Cancel</button>
-        <button type="submit" class="btn" data-sign-submit>Sign and create the payment file</button>
+        <div>
+          <button type="button" class="btn hold-btn" data-sign-submit data-hold-ms="1200"><span class="hold-fill" aria-hidden="true"></span><span data-hold-label>Hold to sign</span></button>
+          <p class="hold-hint" id="hold-hint">Press and hold for about a second. Releasing early cancels.</p>
+        </div>
       </div>
     </footer>
   </form>
@@ -459,7 +475,7 @@
 
 {% if has_receipt and run.mode == "pay_bills" and receipt.signed %}
 <section class="receipt" id="payment-file">
-  <h2>Bank payment file</h2>
+  <div class="section-head"><h2>Bank payment file</h2><span class="stamp stamp-lg stamp-ok{% if done == 'signed' %} is-pressing{% endif %}">Signed</span></div>
   <p class="lead">Download the file and upload it to your bank's bulk-payment screen. Check that the fingerprint (SHA-256) matches. Each signed bill is in one line of one file. A second download gives the same file and creates no new payment.</p>
   <div class="table-wrap">
     <table class="ledger calls">
