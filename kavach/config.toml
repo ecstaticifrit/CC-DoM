@@ -1,5 +1,5 @@
-rule_version = "2026-11-22.1"
-sandbox_label = "Sandbox: RazorpayX test mode. No real money moves."
+rule_version = "2026-11-22.sim1"
+sandbox_label = "Sandbox: local payout simulation. No real money moves."
 
 [limits]
 run_seconds = 600

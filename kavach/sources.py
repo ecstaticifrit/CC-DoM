@@ -35,23 +35,6 @@ class LiveSources:
     def crustdata_key(self) -> str:
         return _read_dotenv_key("CRUSTDATA_API_KEY")
 
-    def ifsc(self, code: str) -> dict:
-        url = f"https://ifsc.razorpay.com/{code}"
-        call = {"adapter": "ifsc", "endpoint": url, "cost_credits": 0.0, "status": "ok"}
-        try:
-            r = httpx.get(url, timeout=self.timeout)
-        except httpx.HTTPError:
-            call["status"] = "error"
-            return {"status": "unavailable", "call": call, "retrieved_at": _now()}
-        if r.status_code == 404:
-            call["status"] = "not_found"
-            return {"status": "invalid", "call": call, "retrieved_at": _now()}
-        if r.status_code != 200:
-            call["status"] = f"http_{r.status_code}"
-            return {"status": "unavailable", "call": call, "retrieved_at": _now()}
-        data = r.json()
-        return {"status": "ok", "bank": data.get("BANK"), "branch": data.get("BRANCH"), "call": call, "retrieved_at": _now()}
-
     def company_domain(self, domain: str) -> dict:
         """Corroborate a carrier's domain with Crustdata company_identify (0.2 credits per match)."""
         call = {"adapter": "crustdata.company_identify", "endpoint": CRUSTDATA_URL, "cost_credits": 0.0, "status": "skipped_no_key"}
@@ -96,12 +79,6 @@ class BudgetedSources:
     def _can_spend(self, estimated_credits: float) -> bool:
         elapsed = time.monotonic() - self.started_at
         return elapsed <= self.max_seconds and (self.credits_used + estimated_credits) <= self.max_credits + 1e-9
-
-    def ifsc(self, code: str) -> dict:
-        if not self._can_spend(0.0):
-            return {"status": "budget_exceeded", "retrieved_at": _now(),
-                    "call": {"adapter": "ifsc", "endpoint": f"https://ifsc.razorpay.com/{code}", "cost_credits": 0.0, "status": "budget_exceeded"}}
-        return self.inner.ifsc(code)
 
     def company_domain(self, domain: str) -> dict:
         if not self._can_spend(COMPANY_IDENTIFY_ESTIMATE):

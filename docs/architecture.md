@@ -1,6 +1,6 @@
 # Kavach architecture
 
-Words follow [`GLOSSARY.md`](../GLOSSARY.md). Status at freeze: the page, upload, saved runs, masking, checks, sign-off, outbox, worker, cost ledger and receipt work and are tested (payouts against a fake provider until test keys are added). Dashed boxes are planned.
+Words follow [`GLOSSARY.md`](../GLOSSARY.md). The current payout path is the [local simulator](adr/0004-local-payout-simulation.md). Dashed boxes are planned.
 
 ```mermaid
 flowchart TD
@@ -10,17 +10,14 @@ flowchart TD
     API --> RULES["Rules engine<br/>versioned config (rule_version)"]
     RULES --> AD["Source adapters<br/>timeouts, retries, cost reservation"]
     AD -->|"company_identify, 0.2 credit/match"| CD["Crustdata API"]
-    AD -->|"GET ifsc.razorpay.com/IFSC, free"| IFSC["Razorpay IFSC API"]
+    RULES -->|"IFSC format and approved record"| IFSC["Local routing check"]
     AD -->|"live fetch"| WEB["AWS legal page (web)"]
     AD -.->|"planned, needs key"| MCA["MCA company master, data.gov.in"]
     AD -->|"each call and its cost"| DB
     RULES -->|"ready / hold / cannot verify + evidence"| DB
     API --> GATE{"Approval gate<br/>controller signs exact batch<br/>server rechecks versions"}
     GATE -->|"intent + idempotency key + reference_id<br/>one transaction"| DB
-    W["Worker thread (same process)"] -->|"reads outbox"| DB
-    W -->|"POST payout, X-Payout-Idempotency<br/>same key + body on retry"| RZX["RazorpayX test mode"]
-    W -->|"lookup by source account + reference_id"| RZX
-    W -->|"submitted / processed / failed / pending_review"| DB
+    GATE -->|"local debit and credit in same transaction"| DB
     DB -.-> REC["Reconciliation vs statement<br/>T+3 reversal watch (planned)"]
     DB --> RCPT["Run receipt<br/>outcomes, IDs, cost ledger, personal data"]
     RCPT --> B
@@ -32,20 +29,20 @@ flowchart TD
 | --- | --- |
 | Run page | Server-rendered HTML with a little JavaScript. Two jobs, upload, review, sign-off, receipt download. Shows only masked fields. |
 | FastAPI app | Parses the CSV, saves the run, serves the page, `result.json` and `status.json`. |
-| SQLite (WAL) | The only state. The page, `result.json` and the worker all read it. Path from `KAVACH_DB`. |
+| SQLite (WAL) | The page and downloads read the same ledger. Path from `KAVACH_DB`. |
 | Rules engine | Decides ready, hold or cannot verify from client records and source evidence. Each run saves its `rule_version`. |
 | Source adapters | One adapter per source. Each sets a timeout, retries a limited number of times, reserves cost first and logs the actual cost. |
 | Approval gate | Accepts a sign-off only for the exact bills, amounts, currencies, destinations and beneficiary versions shown. |
-| Worker thread | Sends payouts from the outbox and recovers after a restart. |
+| Simulator | Records local transfers and balances with sign-off. |
 | Receipt | What finished, what waits, IDs, cost ledger, personal-data block. |
 
 ## Data flow: Pay approved bills
 
 1. The controller uploads bills. Kavach saves every row, masked for display.
 2. Rules compare each bill with the approved beneficiary version and payment history. A changed account or possible duplicate becomes a hold.
-3. Adapters check the IFSC code (Razorpay IFSC API) and corroborate the carrier domain (Crustdata `company_identify`, exact domain equality). A sender-domain mismatch means review, not an accusation.
+3. Rules check IFSC format and the approved record locally. Crustdata can corroborate the carrier domain. A sender-domain mismatch means review, not an accusation.
 4. The page shows **Needs attention** first, then the clean batch and its total.
-5. The controller signs. The server rechecks and writes the outbox. The worker sends the payouts.
+5. The controller signs. The server rechecks and settles eligible demo transfers.
 
 ## Data flow: Post bank lines
 
@@ -63,7 +60,7 @@ flowchart TD
 ## Where retries sit
 
 - Source adapters: limited retries with timeouts. A failed source marks only the affected fact **cannot verify**.
-- Worker: retries a payout only with the same idempotency key and the same body. Never a fresh key.
+- A repeated sign-off cannot claim the same client/bill twice.
 
 ## Where the cost ledger sits
 
@@ -73,16 +70,11 @@ The adapters write each external call to `ledger_calls`: source, time, credits r
 
 1. The controller signs an exact batch.
 2. The server rechecks each item: same amount, currency, destination and beneficiary version.
-3. In one SQLite transaction, Kavach saves the approved intent under a unique `(client ID, bill ID)`, the source account, destination, amount, currency, idempotency key, exact request body and a unique `reference_id` (max 40 characters).
-4. The worker sends the payout with header `X-Payout-Idempotency` set to the saved key.
-5. On a response, it saves the provider payout ID and status (submitted, then processed).
-6. On a timeout or crash, it retries with the same key and the same body.
-7. If still uncertain, it looks up payouts by source account number and `reference_id`.
-8. Exactly one match with the approved destination, amount and currency: save it. A confirmed `failed`: show failed and return it to the controller.
-9. No match, more than one match, a mismatch or an unavailable provider: `pending_review`. The intent stays locked. No fresh key, no automatic replacement ([ADR 0001](adr/0001-payout-recovery-never-replaces.md)).
-10. A second upload of the same bill finds the saved intent and creates no new payout.
+3. Claim the unique client/bill ID and check available demo funds. Insufficient funds leaves both wallets unchanged.
+4. Record the debit, credit, resulting balances and `sim_` ID in the same transaction. Each beneficiary version has its own wallet.
+5. The receipt uses the recorded balances. A replay does not transfer money again.
 
 ## Kill and restart behaviour
 
 - Working today: after a restart, the same run URL shows the same saved rows. The page shows "Connection lost" with the last update time while the server is down, then reconnects without resubmitting.
-- On start, the worker reads every outbox row that is not final and applies steps 6 to 9. A kill before step 3 leaves no outbox row, so nothing is sent. A kill after the provider accepts is resolved by the same key or the `reference_id` lookup. The rehearsal pass mark is the same three provider payout IDs before and after the restart.
+- A crash before commit rolls back the transfer. After commit, reopening the saved run returns the same IDs and balances. Old provider runs stay read-only.

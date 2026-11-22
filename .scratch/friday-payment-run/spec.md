@@ -1,5 +1,7 @@
 # Kavach v6 | The Friday payment run
 
+**Hackathon implementation change:** [ADR 0004](../../docs/adr/0004-local-payout-simulation.md) replaces this brief's RazorpayX integration and live-payout pass marks with a local wallet simulation. The original brief below is retained for context.
+
 **ContextCon 05, BITS Pilani | Buying and paying | Hackathon build brief | 22 November 2026**
 
 **Pitch:** "One carrier changed its bank account. Why should every other carrier miss Friday's payment? Kavach holds that bill, gets the rest ready for your sign-off, and gives you a receipt showing where every rupee went or why it is still waiting."

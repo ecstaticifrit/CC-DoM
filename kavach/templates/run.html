@@ -2,7 +2,7 @@
 {% block title %}{{ run.run_id }} · Kavach{% endblock %}
 {% block main %}
 {% set has_receipt = receipt is defined %}
-{% set can_select = has_receipt and run.mode == "pay_bills" %}
+{% set can_select = has_receipt and run.mode == "pay_bills" and run.payout_mode == "simulation" %}
 {% set labels = LABELS|default({"not_checked": "Not checked yet", "cannot_verify": "Cannot verify"}) %}
 {% set allowance = receipt.allowance if has_receipt else config.limits %}
 <ol class="steps" aria-label="Workflow steps">
@@ -54,6 +54,8 @@
 
 {% if not has_receipt %}
 <div class="banner banner-info">This preview shows saved upload results only. No payments or postings are made.</div>
+{% elif run.mode == "pay_bills" and not can_select %}
+<div class="banner banner-info">Historical run, read only. Existing instructions will not be replayed. Upload a new demo bill to try the simulator.</div>
 {% elif run.mode == "pay_bills" %}
 <div class="banner banner-info">
   <svg class="banner-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="10" cy="10" r="8"/><path d="M10 9v4.5M10 6.5h.01" stroke-linecap="round"/></svg>
@@ -61,7 +63,7 @@
     {% if receipt.counts.get("ready", 0) %}
       <strong>Next step:</strong> Click any held row to inspect its proof and owner. Tick the ready bills you want to pay, then click <strong>Review batch to approve</strong> below.
     {% elif receipt.signed %}
-      <strong>Batch signed.</strong> Approved bills are saved in the outbox. Refresh or restart anytime — Kavach will never pay a bill twice.
+      <strong>Batch signed.</strong> Review each bill's outcome below. Refreshing does not repeat a transfer.
     {% else %}
       <strong>Review required.</strong> No bills are eligible for sign-off right now. Inspect each exception on the right.
     {% endif %}
@@ -71,13 +73,6 @@
 <div class="banner banner-ok">
   <svg class="banner-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="10" cy="10" r="8"/><path d="M6.5 10.5l2.2 2.2 4.8-5.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
   <div><strong>Statement evaluated.</strong> Supported charges received committed posting IDs. Possible duplicates and unverified lines stay unposted. Re-uploading this file replays these exact outcomes.</div>
-</div>
-{% endif %}
-
-{% if can_select and not provider_ready %}
-<div class="banner banner-warn">
-  <svg class="banner-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M10 3L2 17h16L10 3z"/><path d="M10 8.5v3.5M10 14.5h.01" stroke-linecap="round"/></svg>
-  <div>RazorpayX test keys are not set in <code>.env</code> yet. Signed bills stay safely queued in the outbox as "Payout not sent" until keys are added.</div>
 </div>
 {% endif %}
 
@@ -151,6 +146,19 @@
 {% if has_receipt %}
 <section class="receipt">
   <h2>Run receipt — cost, outcomes &amp; privacy</h2>
+  {% if run.payout_mode == "simulation" %}
+  <h3>Simulated money movement</h3>
+  <p>No real money moves. These are local wallet balances, not bank confirmations.</p>
+  {% if receipt.simulated_transfers %}
+  <div class="table-wrap"><table class="ledger">
+    <thead><tr><th>Bill / transfer</th><th>Carrier wallet</th><th class="num">Moved (Rs)</th><th class="num">Treasury after (Rs)</th><th class="num">Carrier after (Rs)</th></tr></thead>
+    <tbody>{% for t in receipt.simulated_transfers %}<tr>
+      <th>{{ t.bill_id }}<span class="subline"><code>{{ t.transfer_id }}</code></span></th><td>{{ t.beneficiary_wallet }}</td>
+      <td class="num">{{ t.amount_inr }}</td><td class="num">{{ t.treasury_after_inr }}</td><td class="num">{{ t.beneficiary_after_inr }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p>No simulated funds moved in this run.</p>{% endif %}
+  {% endif %}
   <div class="receipt-grid">
     <div class="receipt-block">
       <h3>Outcomes &amp; cost ledger</h3>

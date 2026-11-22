@@ -1,6 +1,4 @@
 import hashlib
-import threading
-from contextlib import asynccontextmanager
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -13,7 +11,6 @@ from fastapi.templating import Jinja2Templates
 from kavach import payrules, postings
 from kavach.config import load_config
 from kavach.intake import IntakeError, parse
-from kavach.payouts import PayoutWorker, RazorpayX
 from kavach.records import load_records
 from kavach.sources import BudgetedSources, LiveSources
 from kavach.store import Store
@@ -31,30 +28,17 @@ ATTENTION_ORDER = ["cannot_verify", "hold_bank_change", "hold_already_paid", "ho
                    "hold_invalid_routing", "review_sender_domain", "already_signed", "not_checked", "ready", "signed", "posted"]
 
 
-def create_app(db_path: Path, sources=None, provider=None, start_worker: bool = True, today: date | None = None) -> FastAPI:
+def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAPI:
     config = load_config()
     store = Store(db_path)
     sources = sources or LiveSources()
-    provider = provider or RazorpayX()
-    worker = PayoutWorker(store, provider)
-
-    @asynccontextmanager
-    async def lifespan(_app):
-        thread = None
-        if start_worker:
-            thread = threading.Thread(target=worker.run_forever, daemon=True)
-            thread.start()
-        yield
-        worker.stop()
-
-    app = FastAPI(title="Kavach", lifespan=lifespan)
-    app.state.worker = worker
+    app = FastAPI(title="Kavach")
     templates = Jinja2Templates(directory=HERE / "templates")
     templates.env.globals["LABELS"] = LABELS
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
     def ctx(**extra):
-        return {"modes": MODES, "config": config, "provider_ready": provider.configured, **extra}
+        return {"modes": MODES, "config": config, "demo_balance": store.demo_balance(), **extra}
 
     @app.get("/", response_class=HTMLResponse)
     def start(request: Request):
@@ -111,6 +95,8 @@ def create_app(db_path: Path, sources=None, provider=None, start_worker: bool = 
 
     def _fingerprints(run: dict) -> dict[int, str]:
         out = {}
+        if run["payout_mode"] != "simulation":
+            return out
         for r in run["rows"]:
             if r["outcome"] == "ready":
                 src = store.raw_row(run["run_id"], r["row_number"])
@@ -131,7 +117,9 @@ def create_app(db_path: Path, sources=None, provider=None, start_worker: bool = 
         if run.get("allowance_credits") is not None:
             allowance["run_credits"] = run["allowance_credits"]
         return {
-            "run_id": run["run_id"], "mode": run["mode"], "sandbox": config["sandbox_label"],
+            "run_id": run["run_id"], "mode": run["mode"], "payout_mode": run["payout_mode"] or "historical",
+            "sandbox": config["sandbox_label"] if run["payout_mode"] else "Historical run; no new transfers.",
+            "simulated_transfers": run["transfers"],
             "allowance": allowance,
             "counts": {k: sum(1 for r in rows if r["outcome"] == k) for k in LABELS if any(r["outcome"] == k for r in rows)},
             "ready_total": total([r for r in rows if r["outcome"] == "ready"]),
@@ -183,7 +171,6 @@ def create_app(db_path: Path, sources=None, provider=None, start_worker: bool = 
         form = await request.form()
         items = [(int(v.split(":")[0]), v.split(":")[1]) for v in form.getlist("item")]
         store.approve(run_id, items, _fingerprints(run), signer="controller")
-        threading.Thread(target=worker.tick, daemon=True).start()
         return RedirectResponse(f"/runs/{run_id}", status_code=303)
 
     @app.get("/runs/{run_id}/result.json")
@@ -191,6 +178,7 @@ def create_app(db_path: Path, sources=None, provider=None, start_worker: bool = 
         run = _run_or_404(run_id)
         return {
             "run_id": run["run_id"], "mode": run["mode"], "rule_version": run["rule_version"], "created_at": run["created_at"],
+            "payout_mode": run["payout_mode"] or "historical",
             "rows": [{
                 "row_number": r["row_number"], "item_ref": r["item_ref"], "outcome": r["outcome"], "missing": r["missing"],
                 "display": r["display"], "decision": r["decision"], "evidence": r["evidence"], "posting": r["posting"],

@@ -53,6 +53,7 @@
       <span><strong>Run allowance:</strong> {{ config.limits.run_seconds // 60 }} minutes</span>
       <label>Max credits <input class="allowance-input" type="number" name="run_credits" step="0.1" min="0" value="{{ config.limits.run_credits }}"></label>
       <span><strong>Mode:</strong> Sandbox</span>
+      {% if demo_balance is defined %}<span><strong>Demo wallet:</strong> Rs {{ demo_balance }}</span>{% endif %}
     </div>
 
     <button class="btn" type="submit">Start payment run</button>

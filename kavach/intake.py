@@ -63,7 +63,12 @@ def _row(mode: str, spec: dict, number: int, record: dict) -> dict:
     missing = [c for c in spec["required"] if not record.get(c)]
     amount = record.get("amount", "")
     try:
-        amount_display = f"{Decimal(amount):,.2f}" if amount else ""
+        value = Decimal(amount) if amount else None
+        if value is not None and (not value.is_finite() or value.adjusted() > 15):
+            raise InvalidOperation
+        if mode == "pay_bills" and value is not None and (value <= 0 or value != value.quantize(Decimal("0.01"))):
+            missing.append("positive INR amount in whole paise")
+        amount_display = f"{value:,.2f}" if value is not None else ""
     except InvalidOperation:
         amount_display = ""
         if "amount" not in missing:
@@ -71,6 +76,8 @@ def _row(mode: str, spec: dict, number: int, record: dict) -> dict:
 
     display = {"amount": amount_display, "currency": record.get("currency", "")}
     if mode == "pay_bills":
+        if display["currency"] and display["currency"] != "INR":
+            missing.append("currency supported by simulator (INR)")
         display |= {
             "carrier": record.get("carrier_name", ""),
             "destination": mask_account(record["account_number"]) if record.get("account_number") else "",

@@ -23,7 +23,7 @@ def test_intake_renderer_shows_saved_rows_without_receipt_or_approval(mode):
     assert "/receipt.json" not in page and "/confirm" not in page
 
 
-def test_upgrade_preserves_intake_rows_and_accepts_new_uploads(db_path, provider):
+def test_upgrade_preserves_intake_rows_and_accepts_new_uploads(db_path):
     with sqlite3.connect(db_path) as db:
         db.executescript("""
             CREATE TABLE runs (run_id TEXT PRIMARY KEY, mode TEXT NOT NULL,
@@ -37,7 +37,7 @@ def test_upgrade_preserves_intake_rows_and_accepts_new_uploads(db_path, provider
                    ("intake-run", 1, "B-1", "not_checked", "[]",
                     json.dumps({"amount": "125.00", "currency": "INR"}), "{}"))
 
-    client = make_client(db_path, provider)
+    client = make_client(db_path)
     page = client.get("/runs/intake-run")
     assert page.status_code == 200 and "Not checked yet" in page.text
     row, = client.get("/runs/intake-run/result.json").json()["rows"]
@@ -47,4 +47,4 @@ def test_upgrade_preserves_intake_rows_and_accepts_new_uploads(db_path, provider
     new_run = upload(client, "pay_bills", bills_csv("B-2,unknown,Example,10,INR,1234,TEST0000001,"))
     assert new_run.status_code == 303
     assert client.get(new_run.headers["location"]).status_code == 200
-    assert not provider.calls
+    assert client.get("/runs/intake-run/receipt.json").json()["payout_mode"] == "historical"

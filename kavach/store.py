@@ -4,11 +4,13 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from kavach.payouts import as_inr, transfer, treasury_balance
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
   run_id TEXT PRIMARY KEY, mode TEXT NOT NULL, rule_version TEXT NOT NULL,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-  input_hash TEXT, allowance_credits REAL
+  input_hash TEXT, allowance_credits REAL, payout_mode TEXT
 );
 CREATE TABLE IF NOT EXISTS rows (
   run_id TEXT NOT NULL REFERENCES runs(run_id), row_number INTEGER NOT NULL,
@@ -28,6 +30,11 @@ CREATE TABLE IF NOT EXISTS outbox (
   signed_at TEXT NOT NULL, body_json TEXT, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
   provider_id TEXT, provider_status TEXT, utr TEXT, note TEXT, updated_at TEXT NOT NULL,
   UNIQUE (client_id, bill_id)
+);
+CREATE TABLE IF NOT EXISTS sim_transfers (
+  payout_id INTEGER PRIMARY KEY REFERENCES outbox(id), wallet TEXT NOT NULL,
+  paise INTEGER NOT NULL CHECK (paise > 0), treasury_after INTEGER NOT NULL CHECK (treasury_after >= 0),
+  beneficiary_after INTEGER NOT NULL CHECK (beneficiary_after > 0)
 );
 """
 CLIENT_ID = "default"
@@ -50,6 +57,8 @@ class Store:
                 con.execute("ALTER TABLE runs ADD COLUMN input_hash TEXT")
             if "allowance_credits" not in cols:
                 con.execute("ALTER TABLE runs ADD COLUMN allowance_credits REAL")
+            if "payout_mode" not in cols:
+                con.execute("ALTER TABLE runs ADD COLUMN payout_mode TEXT")
             row_cols = {r["name"] for r in con.execute("PRAGMA table_info(rows)")}
             if "evidence_json" not in row_cols:
                 con.execute("ALTER TABLE rows ADD COLUMN evidence_json TEXT NOT NULL DEFAULT '[]'")
@@ -76,9 +85,10 @@ class Store:
         run_id = "run_" + uuid.uuid4().hex[:12]
         stamp = now()
         with self._connect() as con:
-            con.execute("INSERT INTO runs (run_id, mode, rule_version, created_at, updated_at, input_hash, allowance_credits) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (run_id, mode, rule_version, stamp, stamp, input_hash, allowance_credits))
+            con.execute("INSERT INTO runs (run_id, mode, rule_version, created_at, updated_at, input_hash, allowance_credits, payout_mode) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (run_id, mode, rule_version, stamp, stamp, input_hash, allowance_credits,
+                         "simulation" if mode == "pay_bills" else "none"))
             for r in rows:
                 con.execute(
                     "INSERT INTO rows (run_id, row_number, item_ref, outcome, missing_json, display_json, "
@@ -108,8 +118,15 @@ class Store:
                 "FROM outbox WHERE run_id = ?", (run_id,))}
             calls = [dict(c) for c in con.execute(
                 "SELECT adapter, endpoint, cost_credits, status, at FROM ledger_calls WHERE run_id = ? ORDER BY id", (run_id,))]
+            transfers = [{
+                "bill_id": t["bill_id"], "transfer_id": t["provider_id"], "beneficiary_wallet": t["wallet"],
+                "amount_inr": as_inr(t["paise"]), "treasury_after_inr": as_inr(t["treasury_after"]),
+                "beneficiary_after_inr": as_inr(t["beneficiary_after"]),
+            } for t in con.execute("SELECT o.bill_id, o.provider_id, t.* FROM sim_transfers t "
+                                   "JOIN outbox o ON o.id=t.payout_id WHERE o.run_id=? ORDER BY t.payout_id", (run_id,))]
         return {
             **dict(run),
+            "transfers": transfers,
             "calls": calls,
             "rows": [
                 {
@@ -134,42 +151,38 @@ class Store:
             p = con.execute("SELECT * FROM outbox WHERE client_id = ? AND bill_id = ?", (CLIENT_ID, bill_id)).fetchone()
         return dict(p) if p else None
 
-    def approve(self, run_id: str, items: list[tuple[int, str]], fingerprints: dict[int, str], signer: str) -> list[str]:
-        """Sign an exact batch in one transaction. Returns refs that were queued."""
-        queued = []
+    def demo_balance(self) -> str:
+        with self._connect() as con:
+            return as_inr(treasury_balance(con))
+
+    def approve(self, run_id: str, items: list[tuple[int, str]], fingerprints: dict[int, str], signer: str) -> None:
+        """Sign and settle new demo bills atomically; never replay historical provider intents."""
         with self._connect() as con:
             con.execute("BEGIN IMMEDIATE")
+            run = con.execute("SELECT mode, payout_mode FROM runs WHERE run_id=?", (run_id,)).fetchone()
+            if not run or run["mode"] != "pay_bills" or run["payout_mode"] != "simulation":
+                return
             for row_number, signed_fp in items:
-                row = con.execute("SELECT item_ref, outcome FROM rows WHERE run_id = ? AND row_number = ?",
+                row = con.execute("SELECT item_ref, outcome, raw_json, display_json FROM rows WHERE run_id = ? AND row_number = ?",
                                   (run_id, row_number)).fetchone()
                 if row is None or row["outcome"] != "ready" or fingerprints.get(row_number) != signed_fp:
                     continue
+                reference = uuid.uuid4().hex
                 cur = con.execute(
-                    "INSERT OR IGNORE INTO outbox (client_id, bill_id, run_id, row_number, idem_key, reference_id, "
-                    "fingerprint, signed_by, signed_at, status, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
-                    (CLIENT_ID, row["item_ref"], run_id, row_number, str(uuid.uuid4()), uuid.uuid4().hex,
+                    "INSERT INTO outbox (client_id, bill_id, run_id, row_number, idem_key, reference_id, "
+                    "fingerprint, signed_by, signed_at, status, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?) "
+                    "ON CONFLICT(client_id, bill_id) DO NOTHING",
+                    (CLIENT_ID, row["item_ref"], run_id, row_number, str(uuid.uuid4()), reference,
                      signed_fp, signer, now(), now()),
                 )
                 if cur.rowcount:
+                    transfer(con, cur.lastrowid, reference, json.loads(row["raw_json"]),
+                             json.loads(row["display_json"])["beneficiary_version"])
                     con.execute("UPDATE rows SET outcome = 'signed' WHERE run_id = ? AND row_number = ?", (run_id, row_number))
-                    queued.append(row["item_ref"])
-            self.touch(con, run_id)
-        return queued
-
-    # Outbox operations used by the payout worker.
-    def open_payouts(self) -> list[dict]:
-        with self._connect() as con:
-            return [dict(p) for p in con.execute(
-                "SELECT * FROM outbox WHERE status IN ('pending', 'sending', 'not_configured') "
-                "OR (status = 'submitted' AND COALESCE(provider_status, '') NOT IN ('processed', 'reversed', 'failed', 'rejected', 'cancelled')) "
-                "ORDER BY id")]
-
-    def update_payout(self, payout_id: int, **fields) -> None:
-        fields["updated_at"] = now()
-        cols = ", ".join(f"{k} = ?" for k in fields)
-        with self._connect() as con:
-            con.execute(f"UPDATE outbox SET {cols} WHERE id = ?", (*fields.values(), payout_id))
-            run_id = con.execute("SELECT run_id FROM outbox WHERE id = ?", (payout_id,)).fetchone()["run_id"]
+                else:
+                    con.execute("UPDATE rows SET outcome='already_signed', decision_json=? WHERE run_id=? AND row_number=?",
+                                (json.dumps({"reason": "This bill was signed earlier. No new demo funds moved."}),
+                                 run_id, row_number))
             self.touch(con, run_id)
 
     def record_call(self, run_id: str, call: dict) -> None:

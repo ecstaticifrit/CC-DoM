@@ -9,6 +9,7 @@
 
 <h1>Approve {{ items|length }} bill{{ "s" if items|length != 1 }} for Rs {{ total }}</h1>
 <p class="lead">You are signing exactly these bills, amounts, masked destinations and beneficiary versions. Kavach rechecks every item on the server before acting. A held or changed bill cannot be sent under this sign-off.</p>
+{% if run.payout_mode == "simulation" %}<p>Simulation only. Approval moves demo INR from the treasury (Rs {{ demo_balance }} available) to these carrier wallets. No bank is contacted.</p>{% endif %}
 
 <form method="post" action="/runs/{{ run.run_id }}/approve">
   <div class="table-wrap">

@@ -1,5 +1,6 @@
 """Pay approved bills: decide, per bill, whether it is ready to sign or held, with evidence."""
 import hashlib
+import re
 from datetime import date, timedelta
 
 from kavach.masking import mask_account
@@ -110,21 +111,10 @@ def evaluate_bills(rows: list[dict], records: dict, sources, today: date) -> lis
             continue
         seen_in_file[key] = row["item_ref"]
 
-        ifsc = sources.ifsc(raw["ifsc"])
-        row.setdefault("calls", []).append(ifsc["call"])
-        if ifsc["status"] == "invalid":
-            out.append(_set(row, "hold_invalid_routing", reason=f"IFSC {raw['ifsc']} is not a valid bank branch code.",
-                            owner="AP lead", next_step="Get the correct IFSC from the carrier's approved record.",
-                            ev=("api_response", ifsc["call"]["endpoint"], "HTTP 404", None, ifsc["retrieved_at"])))
+        if not re.fullmatch(r"[A-Z]{4}0[A-Z0-9]{6}", raw["ifsc"]):
+            out.append(_set(row, "hold_invalid_routing", reason="The IFSC does not have the expected format.",
+                            owner="AP lead", next_step="Check the IFSC in the carrier's approved record."))
             continue
-        if ifsc["status"] == "ok":
-            row["evidence"].append({"source_type": "api_response", "source_ref": ifsc["call"]["endpoint"],
-                                    "field_or_passage": f"BANK={ifsc['bank']}, BRANCH={ifsc['branch']} (branch exists; does not prove account owner)",
-                                    "record_date": None, "retrieved_at": ifsc["retrieved_at"]})
-        else:
-            row["evidence"].append({"source_type": "api_response", "source_ref": ifsc["call"]["endpoint"],
-                                    "field_or_passage": "IFSC lookup unavailable; routing not re-checked (approved record matches)",
-                                    "record_date": None, "retrieved_at": ifsc["retrieved_at"]})
 
         sender = raw.get("sender_email", "")
         domain = sender.partition("@")[2].lower().strip() if "@" in sender else ""

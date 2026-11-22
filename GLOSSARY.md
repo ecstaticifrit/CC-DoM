@@ -59,15 +59,15 @@ The AP lead's confirmation of a requested beneficiary change through the trusted
 _Avoid_: Verification call, OOB check
 
 **Payout**:
-A transfer of money to a beneficiary through the payment provider, in test mode for this event.
+A simulated transfer of demo INR from the treasury to a beneficiary wallet. It does not move bank funds.
 _Avoid_: Payment (when meaning the provider transfer), transfer
 
 **Submitted**:
-The provider received the payout request.
+The simulator accepted the signed transfer.
 _Avoid_: Paid, sent
 
 **Processed**:
-The provider reports the payout as completed.
+The simulator recorded the treasury debit and beneficiary credit. This is not bank settlement.
 _Avoid_: Paid, settled
 
 **Reconciled**:

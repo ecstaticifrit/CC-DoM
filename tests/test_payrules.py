@@ -9,12 +9,6 @@ SAMPLE = Path(__file__).resolve().parent.parent / "data" / "samples" / "friday_b
 
 
 class FakeSources:
-    def ifsc(self, code):
-        call = {"adapter": "ifsc", "endpoint": f"https://ifsc.razorpay.com/{code}", "cost_credits": 0.0, "status": "ok"}
-        if code == "XXXX0000000":
-            return {"status": "invalid", "call": call, "retrieved_at": "t"}
-        return {"status": "ok", "bank": "Bank", "branch": "Branch", "call": call, "retrieved_at": "t"}
-
     def fetch_page_text(self, url):
         return ("Account Country | AWS Contracting Party ... Amazon Web Services EMEA SARL | 352 2789 0057 | "
                 "38 Avenue John F. Kennedy, L-1855, Luxembourg", "2026-11-22T10:00:00+00:00")
@@ -48,8 +42,8 @@ def test_exact_sender_domain_match_adds_no_hold_and_lookalike_goes_to_review():
 
 def test_invalid_ifsc_on_an_otherwise_matching_bill_is_held():
     records = load_records()
-    records["carriers"]["CAR-1"]["beneficiaries"][0]["ifsc"] = "XXXX0000000"
+    records["carriers"]["CAR-1"]["beneficiaries"][0]["ifsc"] = "BAD-CODE"
     header = b"bill_id,carrier_id,carrier_name,amount,currency,account_number,ifsc,sender_email\n"
-    rows = evaluate_bills(parse("pay_bills", header + b"C-301,CAR-1,Blue Dart,700,INR,502000112341234,XXXX0000000,\n"),
+    rows = evaluate_bills(parse("pay_bills", header + b"C-301,CAR-1,Blue Dart,700,INR,502000112341234,BAD-CODE,\n"),
                           records, FakeSources(), date(2026, 11, 27))
     assert rows[0]["outcome"] == "hold_invalid_routing"
