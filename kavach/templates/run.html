@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ run.run_id }} · Kavach{% endblock %}
+{% block main %}
+<section class="run-head" data-run-id="{{ run.run_id }}" data-updated="{{ run.updated_at }}">
+  <h1>{{ mode_label }}</h1>
+  <dl class="facts">
+    <dt>Run</dt><dd><code>{{ run.run_id }}</code></dd>
+    <dt>Rows</dt><dd>{{ rows|length }}</dd>
+    <dt>Needs attention</dt><dd>{{ rows|selectattr("outcome", "equalto", "cannot_verify")|list|length }}</dd>
+    <dt>Run allowance</dt><dd>{{ config.limits.run_seconds // 60 }} minutes, {{ config.limits.run_credits }} credits</dd>
+    <dt>Last update</dt><dd><time class="updated">{{ run.updated_at }}</time></dd>
+  </dl>
+  <p class="actions"><a href="/runs/{{ run.run_id }}/result.json" download>Download result (JSON)</a></p>
+</section>
+<p class="conn" role="status" hidden>Connection lost. Last update <time></time>. Retrying…</p>
+
+<div class="workspace">
+  <table class="ledger">
+    <thead>
+      <tr>
+        <th scope="col">{% if run.mode == "pay_bills" %}Bill{% else %}Line{% endif %}</th>
+        <th scope="col">{% if run.mode == "pay_bills" %}Carrier{% else %}Description{% endif %}</th>
+        <th scope="col">Status</th>
+        <th scope="col" class="num">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr class="row" tabindex="0" data-row="{{ row.row_number }}">
+        <th scope="row">{{ row.item_ref }}</th>
+        <td>{% if run.mode == "pay_bills" %}{{ row.display.carrier }}{% else %}{{ row.display.description }}{% endif %}</td>
+        <td class="status status-{{ row.outcome }}">
+          {% if row.outcome == "cannot_verify" %}Cannot verify: missing {{ row.missing|join(", ") }}{% else %}Not checked yet{% endif %}
+        </td>
+        <td class="num">{{ row.display.amount }} {{ row.display.currency }}</td>
+      </tr>
+      <tr class="evidence" data-for="{{ row.row_number }}" hidden>
+        <td colspan="4">
+          <dl>
+            {% for key, value in row.display.items() if value %}<dt>{{ key }}</dt><dd>{{ value }}</dd>{% endfor %}
+            {% if row.missing %}<dt>Missing</dt><dd>{{ row.missing|join(", ") }}</dd>{% endif %}
+            <dt>Next step</dt><dd>{% if row.missing %}Supply the missing value and upload again. Kavach will not pay or post this row.{% else %}Checks run in a later step. Nothing is paid or posted yet.{% endif %}</dd>
+          </dl>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <aside class="panel" aria-live="polite"><p>Select a row to see its evidence.</p></aside>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/app.js" defer></script>{% endblock %}
