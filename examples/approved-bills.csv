@@ -1,0 +1,3 @@
+bill_id,carrier_id,carrier_name,amount,currency,account_number,ifsc,sender_email
+DEMO-101,CAR-01,Demo Parcel Co,12500.00,INR,000000001234,TEST0000001,dispatch@example.invalid
+DEMO-102,CAR-02,Demo Road Freight,48000.00,INR,,TEST0000002,
