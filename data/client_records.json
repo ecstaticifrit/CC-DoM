@@ -2,6 +2,7 @@
   "client": {"name": "Sahyadri Freight Services Pvt Ltd (fictional client)"},
   "descriptor_rules": [
     {"pattern": "SWIGGY", "vendor_id": "V-SWIGGY"},
+    {"pattern": "AMAZON WEB SERVICES EMEA SARL", "vendor_id": "V-AWS-EMEA"},
     {"pattern": "AWS EMEA", "vendor_id": "V-AWS-EMEA"}
   ],
   "vendors": {

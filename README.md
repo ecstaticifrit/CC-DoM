@@ -8,6 +8,8 @@ Track: Buying and paying. Kavach never moves money: it writes a bank payment fil
 
 ## The service
 
+For public-source test data, see [dataset provenance and upload instructions](data/SOURCES.md). The DWP sample contains actual published GBP payments; the Speed Post sample uses published INR tariffs with fictional payment instructions.
+
 **The job.** Kavach does the outsourced payables desk's work between bill approval and statement reconciliation. The client is a mid-size Indian logistics (3PL) company. Each week it must pay many carriers. The work is:
 
 1. Compare approved bills with the approved bank destinations and the payment history.

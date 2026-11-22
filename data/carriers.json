@@ -3,6 +3,7 @@
     "CAR-1": {
       "name": "Blue Dart Express Limited",
       "domain": "bluedart.com",
+      "public_identity": {"cin": "L61074MH1991PLC061074", "source": "https://www.bluedart.com/documents/d/guest/audited-financial-results-for-the-quarter-year-ended-march-31-2025"},
       "beneficiaries": [
         {"version": 2, "account_number": "502000112341234", "ifsc": "HDFC0000053", "status": "active", "authorized_at": "2026-09-12"},
         {"version": 1, "account_number": "502000110005555", "ifsc": "HDFC0000053", "status": "retired", "authorized_at": "2025-04-01"}
@@ -12,6 +13,7 @@
     "CAR-2": {
       "name": "VRL Logistics Limited",
       "domain": "vrlgroup.in",
+      "public_identity": {"cin": "L60210KA1983PLC005247", "source": "https://vrlgroup.in/investor_download/Annual_Report_2024_25.pdf"},
       "beneficiaries": [
         {"version": 1, "account_number": "00431100022227777", "ifsc": "SBIN0000691", "status": "active", "authorized_at": "2026-09-20"}
       ],
@@ -24,6 +26,14 @@
         {"version": 1, "account_number": "917020045673333", "ifsc": "UTIB0000004", "status": "active", "authorized_at": "2026-10-01"}
       ],
       "trusted_contact": {"role": "Proprietor", "record_id": "TC-0303", "enrolled_at": "2026-10-01"}
+    },
+    "DEMO-POST": {
+      "name": "Department of Posts (test beneficiary)",
+      "domain": null,
+      "beneficiaries": [
+        {"version": 1, "account_number": "TESTONLY0001", "ifsc": "HDFC0000053", "status": "active", "authorized_at": "2025-10-01"}
+      ],
+      "trusted_contact": null
     },
     "CAR-4": {
       "name": "Navata Road Transport",
