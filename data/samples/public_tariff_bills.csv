@@ -1,0 +1,5 @@
+bill_id,carrier_id,carrier_name,amount,currency,account_number,ifsc,sender_email
+DEMO-POST-01,DEMO-POST,Department of Posts (test beneficiary),19.00,INR,TESTONLY0001,HDFC0000053,
+DEMO-POST-02,DEMO-POST,Department of Posts (test beneficiary),47.00,INR,TESTONLY0001,HDFC0000053,
+DEMO-POST-03,DEMO-POST,Department of Posts (test beneficiary),24.00,INR,TESTONLY9999,HDFC0000053,
+DEMO-POST-04,DEMO-POST,Department of Posts (test beneficiary),47.00,INR,TESTONLY0001,HDFC0000053,

@@ -46,7 +46,7 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
 
     @app.get("/samples/{filename}")
     def sample_file(filename: str):
-        allowed = {"friday_bills.csv", "brief_bank_lines.csv"}
+        allowed = {"friday_bills.csv", "brief_bank_lines.csv", "public_spending_gbp.csv", "public_tariff_bills.csv"}
         if filename not in allowed:
             raise HTTPException(404, "Sample not found")
         path = HERE.parent / "data" / "samples" / filename
