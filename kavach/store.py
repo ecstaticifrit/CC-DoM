@@ -7,7 +7,8 @@ from pathlib import Path
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
   run_id TEXT PRIMARY KEY, mode TEXT NOT NULL, rule_version TEXT NOT NULL,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  input_hash TEXT, allowance_credits REAL
 );
 CREATE TABLE IF NOT EXISTS rows (
   run_id TEXT NOT NULL REFERENCES runs(run_id), row_number INTEGER NOT NULL,
@@ -44,6 +45,11 @@ class Store:
         with self._connect() as con:
             con.execute("PRAGMA journal_mode=WAL")
             con.executescript(SCHEMA)
+            cols = {r["name"] for r in con.execute("PRAGMA table_info(runs)")}
+            if "input_hash" not in cols:
+                con.execute("ALTER TABLE runs ADD COLUMN input_hash TEXT")
+            if "allowance_credits" not in cols:
+                con.execute("ALTER TABLE runs ADD COLUMN allowance_credits REAL")
 
     def _connect(self) -> sqlite3.Connection:
         con = sqlite3.connect(self.path, timeout=5)
@@ -52,11 +58,19 @@ class Store:
         con.row_factory = sqlite3.Row
         return con
 
-    def create_run(self, mode: str, rule_version: str, rows: list[dict]) -> str:
+    def find_run_by_hash(self, mode: str, input_hash: str) -> str | None:
+        with self._connect() as con:
+            r = con.execute("SELECT run_id FROM runs WHERE mode = ? AND input_hash = ? ORDER BY created_at LIMIT 1",
+                            (mode, input_hash)).fetchone()
+        return r["run_id"] if r else None
+
+    def create_run(self, mode: str, rule_version: str, rows: list[dict],
+                   input_hash: str | None = None, allowance_credits: float | None = None) -> str:
         run_id = "run_" + uuid.uuid4().hex[:12]
         stamp = now()
         with self._connect() as con:
-            con.execute("INSERT INTO runs VALUES (?, ?, ?, ?, ?)", (run_id, mode, rule_version, stamp, stamp))
+            con.execute("INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (run_id, mode, rule_version, stamp, stamp, input_hash, allowance_credits))
             for r in rows:
                 con.execute(
                     "INSERT INTO rows VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",

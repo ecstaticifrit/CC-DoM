@@ -1,18 +1,35 @@
 {% extends "base.html" %}
+{% block title %}Confirm approval · {{ run.run_id }} · Kavach{% endblock %}
 {% block main %}
+<ol class="steps" aria-label="Workflow steps">
+  <li class="done"><span class="step-num">1</span>Uploaded CSV</li>
+  <li class="done"><span class="step-num">2</span>Reviewed holds &amp; evidence</li>
+  <li class="active"><span class="step-num">3</span>Final sign-off</li>
+</ol>
+
 <h1>Approve {{ items|length }} bill{{ "s" if items|length != 1 }} for Rs {{ total }}</h1>
-<p>You are signing exactly these bills, amounts and destinations. Kavach rechecks each one before sending. A held or changed bill cannot be sent under this approval.</p>
+<p class="lead">You are signing exactly these bills, amounts, masked destinations and beneficiary versions. Kavach rechecks every item on the server before acting. A held or changed bill cannot be sent under this sign-off.</p>
+
 <form method="post" action="/runs/{{ run.run_id }}/approve">
-  <table class="ledger">
-    <thead><tr><th scope="col">Bill</th><th scope="col">Carrier</th><th scope="col">Destination</th><th scope="col">Beneficiary version</th><th scope="col" class="num">Amount</th></tr></thead>
-    <tbody>
-      {% for r in items %}
-      <tr><th scope="row">{{ r.item_ref }}<input type="hidden" name="item" value="{{ r.row_number }}:{{ fps[r.row_number] }}"></th>
-        <td>{{ r.display.carrier }}</td><td>{{ r.display.destination }} · {{ r.display.ifsc }}</td>
-        <td>v{{ r.display.beneficiary_version }}</td><td class="num">{{ r.display.amount }} {{ r.display.currency }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <p class="signbar"><a href="/runs/{{ run.run_id }}">Back</a> <button type="submit">Approve {{ items|length }} bill{{ "s" if items|length != 1 }} for Rs {{ total }}</button></p>
+  <div class="table-wrap">
+    <table class="ledger">
+      <thead><tr><th scope="col">Bill</th><th scope="col">Carrier</th><th scope="col">Destination</th><th scope="col">Beneficiary version</th><th scope="col" class="num">Amount</th></tr></thead>
+      <tbody>
+        {% for r in items %}
+        <tr>
+          <th scope="row">{{ r.item_ref }}<input type="hidden" name="item" value="{{ r.row_number }}:{{ fps[r.row_number] }}"></th>
+          <td>{{ r.display.carrier }}</td>
+          <td class="mono">{{ r.display.destination }} · {{ r.display.ifsc }}</td>
+          <td class="mono">v{{ r.display.beneficiary_version }}</td>
+          <td class="num">{{ r.display.amount }} {{ r.display.currency }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="confirm-actions">
+    <a class="btn btn-secondary" href="/runs/{{ run.run_id }}">Back to review</a>
+    <button class="btn" type="submit">Approve {{ items|length }} bill{{ "s" if items|length != 1 }} for Rs {{ total }}</button>
+  </div>
 </form>
 {% endblock %}

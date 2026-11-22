@@ -1,3 +1,4 @@
+import hashlib
 import threading
 from contextlib import asynccontextmanager
 from datetime import date
@@ -5,7 +6,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -14,7 +15,7 @@ from kavach.config import load_config
 from kavach.intake import IntakeError, parse
 from kavach.payouts import PayoutWorker, RazorpayX
 from kavach.records import load_records
-from kavach.sources import LiveSources
+from kavach.sources import BudgetedSources, LiveSources
 from kavach.store import Store
 
 HERE = Path(__file__).parent
@@ -59,16 +60,37 @@ def create_app(db_path: Path, sources=None, provider=None, start_worker: bool = 
     def start(request: Request):
         return templates.TemplateResponse(request, "start.html", ctx())
 
+    @app.get("/samples/{filename}")
+    def sample_file(filename: str):
+        allowed = {"friday_bills.csv", "brief_bank_lines.csv"}
+        if filename not in allowed:
+            raise HTTPException(404, "Sample not found")
+        path = HERE.parent / "data" / "samples" / filename
+        if not path.exists():
+            raise HTTPException(404, "Sample not found")
+        return FileResponse(path, media_type="text/csv", filename=filename)
+
     @app.post("/runs")
-    async def create_run(request: Request, mode: str = Form(""), file: UploadFile | None = None):
+    async def create_run(request: Request, mode: str = Form(""), run_credits: str = Form(""), file: UploadFile | None = None):
+        live_config = load_config()
         data = await file.read() if file else b""
         try:
             rows = parse(mode, data)
         except IntakeError as err:
             return templates.TemplateResponse(request, "start.html", ctx(error=str(err)), status_code=400)
+        input_hash = hashlib.sha256(data).hexdigest()
+        if mode == "post_lines":
+            existing = store.find_run_by_hash("post_lines", input_hash)
+            if existing:
+                return RedirectResponse(f"/runs/{existing}", status_code=303)
+        try:
+            cap = float(run_credits) if run_credits.strip() else float(live_config["limits"]["run_credits"])
+        except ValueError:
+            cap = float(live_config["limits"]["run_credits"])
+        budgeted = BudgetedSources(sources, max_credits=max(0.0, cap), max_seconds=float(live_config["limits"]["run_seconds"]))
         records = load_records()
         if mode == "pay_bills":
-            rows = payrules.evaluate_bills(rows, records, sources, today or date.today())
+            rows = payrules.evaluate_bills(rows, records, budgeted, today or date.today())
             for row in rows:
                 earlier = store.payout_for_bill(row["item_ref"]) if row["outcome"] != "cannot_verify" else None
                 if earlier:
@@ -77,8 +99,8 @@ def create_app(db_path: Path, sources=None, provider=None, start_worker: bool = 
                                                  f"(reference {earlier['reference_id'][:8]}…). Kavach will not pay it twice.",
                                        "owner": "Controller", "next_step": "Open the earlier run to follow that payout."}
         else:
-            rows = postings.evaluate_lines(rows, records, getattr(sources, "fetch_page_text", postings.fetch_page_text))
-        run_id = store.create_run(mode, config["rule_version"], rows)
+            rows = postings.evaluate_lines(rows, records, budgeted.fetch_page_text)
+        run_id = store.create_run(mode, live_config["rule_version"], rows, input_hash=input_hash, allowance_credits=cap)
         return RedirectResponse(f"/runs/{run_id}", status_code=303)
 
     def _run_or_404(run_id: str) -> dict:
@@ -105,9 +127,12 @@ def create_app(db_path: Path, sources=None, provider=None, start_worker: bool = 
         processed = [r for r in submitted if r["payout"]["provider_status"] == "processed"]
         credits = sum(c["cost_credits"] for c in run["calls"])
         rate = config["costs"]
+        allowance = {**config["limits"]}
+        if run.get("allowance_credits") is not None:
+            allowance["run_credits"] = run["allowance_credits"]
         return {
             "run_id": run["run_id"], "mode": run["mode"], "sandbox": config["sandbox_label"],
-            "allowance": config["limits"],
+            "allowance": allowance,
             "counts": {k: sum(1 for r in rows if r["outcome"] == k) for k in LABELS if any(r["outcome"] == k for r in rows)},
             "ready_total": total([r for r in rows if r["outcome"] == "ready"]),
             "held_total": total(held), "held": len(held),

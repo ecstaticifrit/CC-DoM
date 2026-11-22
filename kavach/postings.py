@@ -3,6 +3,7 @@
 Pure module. External fetches go through an injected fetch_text(url) -> (text, retrieved_at).
 """
 import re
+import uuid
 from decimal import Decimal, InvalidOperation
 
 NO_DESCRIPTOR_RULE = "legal payee: no client record links this descriptor to a vendor"
@@ -54,7 +55,7 @@ def _evaluate(row, records, fetch_text, fetched, seen):
     seen[key] = row["item_ref"]
     row["outcome"] = "posted"
     row["missing"] = []
-    row["posting"] = {"legal_payee": legal_name, "ledger_account": ledger}
+    row["posting"] = {"posting_id": "post_" + uuid.uuid4().hex[:12], "legal_payee": legal_name, "ledger_account": ledger}
 
 
 def _cannot(row, fact):

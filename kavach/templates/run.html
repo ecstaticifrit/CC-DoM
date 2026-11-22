@@ -1,90 +1,184 @@
 {% extends "base.html" %}
 {% block title %}{{ run.run_id }} · Kavach{% endblock %}
 {% block main %}
+<ol class="steps" aria-label="Workflow steps">
+  <li class="done"><span class="step-num">1</span>Uploaded CSV</li>
+  <li class="active"><span class="step-num">2</span>Review holds &amp; evidence</li>
+  <li {% if receipt.signed > 0 or receipt.posted > 0 %}class="done"{% endif %}><span class="step-num">3</span>{% if run.mode == "pay_bills" %}Approve clean batch{% else %}Posted &amp; receipt{% endif %}</li>
+</ol>
+
 <section class="run-head" data-run-id="{{ run.run_id }}" data-updated="{{ run.updated_at }}">
-  <h1>{{ mode_label }}</h1>
-  <dl class="facts">
-    <dt>Run</dt><dd><code>{{ run.run_id }}</code></dd>
-    <dt>Rows</dt><dd>{{ rows|length }}</dd>
-    <dt>Needs attention</dt><dd>{{ receipt.held }} (Rs {{ receipt.held_total }})</dd>
-    {% if run.mode == "pay_bills" %}<dt>Ready to sign</dt><dd>{{ receipt.counts.get("ready", 0) }} (Rs {{ receipt.ready_total }})</dd>{% endif %}
-    <dt>Run allowance</dt><dd>{{ config.limits.run_seconds // 60 }} minutes, {{ config.limits.run_credits }} credits</dd>
-    <dt>Last update</dt><dd><time class="updated">{{ run.updated_at }}</time></dd>
+  <div class="run-header">
+    <div>
+      <h1>{{ mode_label }}</h1>
+      <div class="run-meta">
+        <span>Run <code>{{ run.run_id }}</code></span>
+        <span>Rules <code>{{ run.rule_version }}</code></span>
+        <span>Allowance {{ receipt.allowance.run_seconds // 60 }}m / {{ receipt.allowance.run_credits }} cr</span>
+        <span>Updated <time class="updated">{{ run.updated_at }}</time></span>
+      </div>
+    </div>
+    <div class="run-actions">
+      <a class="btn btn-secondary btn-sm" href="/">New run</a>
+      <a class="btn btn-secondary btn-sm" href="/runs/{{ run.run_id }}/result.json" download>Result JSON</a>
+      <a class="btn btn-secondary btn-sm" href="/runs/{{ run.run_id }}/receipt.json" download>Receipt JSON</a>
+    </div>
+  </div>
+
+  <dl class="summary-strip">
+    <div class="summary-item {% if receipt.held %}is-warn{% endif %}"><dt>Needs attention</dt><dd>{{ receipt.held }} · Rs {{ receipt.held_total }}</dd></div>
+    {% if run.mode == "pay_bills" %}
+    <div class="summary-item is-ok"><dt>Ready to sign</dt><dd>{{ receipt.counts.get("ready", 0) }} · Rs {{ receipt.ready_total }}</dd></div>
+    <div class="summary-item"><dt>Signed / Submitted</dt><dd>{{ receipt.signed }} / {{ receipt.submitted }}</dd></div>
+    {% else %}
+    <div class="summary-item is-ok"><dt>Posted once</dt><dd>{{ receipt.posted }} of {{ rows|length }}</dd></div>
+    <div class="summary-item"><dt>Payout calls</dt><dd>0 (disabled in this mode)</dd></div>
+    {% endif %}
+    <div class="summary-item"><dt>Live API cost</dt><dd>{{ receipt.cost.crustdata_credits }} cr · Rs {{ receipt.cost.inr }}</dd></div>
   </dl>
-  <p class="actions"><a href="/runs/{{ run.run_id }}/result.json" download>Download result (JSON)</a> · <a href="/runs/{{ run.run_id }}/receipt.json" download>Download receipt (JSON)</a></p>
-  {% if run.mode == "pay_bills" and not provider_ready %}<p class="error">RazorpayX test keys are missing. Signed bills will wait as "Payout not sent" until keys are added and the app restarts.</p>{% endif %}
 </section>
-<p class="conn" role="status" hidden>Connection lost. Last update <time></time>. Retrying…</p>
+
+<div class="banner banner-err conn" role="status" hidden>
+  <svg class="banner-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M10 3L2 17h16L10 3z"/><path d="M10 8.5v3.5M10 14.5h.01" stroke-linecap="round"/></svg>
+  <div><strong>Connection lost.</strong> Last update <time></time>. Retrying automatically — do not resubmit.</div>
+</div>
+
+{% if run.mode == "pay_bills" %}
+<div class="banner banner-info">
+  <svg class="banner-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="10" cy="10" r="8"/><path d="M10 9v4.5M10 6.5h.01" stroke-linecap="round"/></svg>
+  <div>
+    {% if receipt.counts.get("ready", 0) %}
+      <strong>Next step:</strong> Click any held row to inspect its proof and owner. Tick the ready bills you want to pay, then click <strong>Review batch to approve</strong> below.
+    {% elif receipt.signed %}
+      <strong>Batch signed.</strong> Approved bills are saved in the outbox. Refresh or restart anytime — Kavach will never pay a bill twice.
+    {% else %}
+      <strong>Review required.</strong> No bills are eligible for sign-off right now. Inspect each exception on the right.
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div class="banner banner-ok">
+  <svg class="banner-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="10" cy="10" r="8"/><path d="M6.5 10.5l2.2 2.2 4.8-5.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <div><strong>Statement evaluated.</strong> Supported charges received committed posting IDs. Possible duplicates and unverified lines stay unposted. Re-uploading this file replays these exact outcomes.</div>
+</div>
+{% endif %}
+
+{% if run.mode == "pay_bills" and not provider_ready %}
+<div class="banner banner-warn">
+  <svg class="banner-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M10 3L2 17h16L10 3z"/><path d="M10 8.5v3.5M10 14.5h.01" stroke-linecap="round"/></svg>
+  <div>RazorpayX test keys are not set in <code>.env</code> yet. Signed bills stay safely queued in the outbox as "Payout not sent" until keys are added.</div>
+</div>
+{% endif %}
 
 <form method="post" action="/runs/{{ run.run_id }}/confirm" class="batch">
 <div class="workspace">
-  <table class="ledger">
-    <thead>
-      <tr>
-        {% if run.mode == "pay_bills" %}<th scope="col"><span class="sr">Select</span></th>{% endif %}
-        <th scope="col">{% if run.mode == "pay_bills" %}Bill{% else %}Line{% endif %}</th>
-        <th scope="col">{% if run.mode == "pay_bills" %}Carrier{% else %}Description{% endif %}</th>
-        <th scope="col">Status</th>
-        <th scope="col" class="num">Amount</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in rows %}
-      <tr class="row" tabindex="0" data-row="{{ row.row_number }}" data-amount="{{ row.display.amount|replace(',', '') }}">
-        {% if run.mode == "pay_bills" %}<td>{% if row.outcome == "ready" %}<input type="checkbox" name="row" value="{{ row.row_number }}" aria-label="Select {{ row.item_ref }}">{% endif %}</td>{% endif %}
-        <th scope="row">{{ row.item_ref }}</th>
-        <td>{% if run.mode == "pay_bills" %}{{ row.display.carrier }}{% else %}{{ row.display.description }}{% endif %}</td>
-        <td class="status status-{{ row.outcome }}">
-          {{ LABELS.get(row.outcome, row.outcome) }}{% if row.outcome == "cannot_verify" and row.missing %}: missing {{ row.missing|join(", ") }}{% endif %}
-          {% if row.posting %}<br><small>{{ row.posting.legal_payee }} → {{ row.posting.ledger_account }}</small>{% endif %}
-          {% if row.payout %}<br><small>Payout: {{ row.payout.status }}{% if row.payout.provider_status %} / {{ row.payout.provider_status }}{% endif %}{% if row.payout.provider_id %} · <code>{{ row.payout.provider_id }}</code>{% endif %}</small>
-          {% if row.payout.note %}<br><small>{{ row.payout.note }}</small>{% endif %}{% endif %}
-        </td>
-        <td class="num">{{ row.display.amount }} {{ row.display.currency }}</td>
-      </tr>
-      <tr class="evidence" data-for="{{ row.row_number }}" hidden>
-        <td colspan="5">
-          <dl>
-            {% if row.decision.reason %}<dt>Why</dt><dd>{{ row.decision.reason }}</dd>{% endif %}
-            {% if row.display.reason %}<dt>Why</dt><dd>{{ row.display.reason }}</dd>{% endif %}
-            {% if row.missing %}<dt>Missing</dt><dd>{{ row.missing|join("; ") }}</dd>{% endif %}
-            {% if row.decision.owner %}<dt>Owner</dt><dd>{{ row.decision.owner }}</dd>{% endif %}
-            {% if row.decision.next_step %}<dt>Next step</dt><dd>{{ row.decision.next_step }}</dd>{% endif %}
-            {% for key in ["destination", "approved_destination", "beneficiary_version", "ifsc", "sender", "date", "reference", "legal_payee", "ledger_account"] %}{% if row.display.get(key) %}<dt>{{ key|replace("_", " ") }}</dt><dd>{{ row.display[key] }}</dd>{% endif %}{% endfor %}
-            {% for ev in row.evidence %}<dt>Evidence</dt><dd>{{ ev.field_or_passage }}<br><small>{{ ev.source_type }} · {{ ev.source_ref }}{% if ev.record_date %} · record {{ ev.record_date }}{% endif %}{% if ev.retrieved_at %} · retrieved {{ ev.retrieved_at }}{% endif %}</small></dd>{% endfor %}
-          </dl>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <aside class="panel" aria-live="polite"><p>Select a row to see its evidence.</p></aside>
+  <div class="table-wrap">
+    <table class="ledger">
+      <thead>
+        <tr>
+          {% if run.mode == "pay_bills" %}<th scope="col">{% if receipt.counts.get("ready", 0) %}<input type="checkbox" data-select-all aria-label="Select all ready bills">{% else %}<span class="sr">Select</span>{% endif %}</th>{% endif %}
+          <th scope="col">{% if run.mode == "pay_bills" %}Bill{% else %}Line{% endif %}</th>
+          <th scope="col">{% if run.mode == "pay_bills" %}Carrier{% else %}Description{% endif %}</th>
+          <th scope="col">Status</th>
+          <th scope="col" class="num">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr class="row" tabindex="0" data-row="{{ row.row_number }}" data-amount="{{ row.display.amount|replace(',', '') }}">
+          {% if run.mode == "pay_bills" %}<td>{% if row.outcome == "ready" %}<input type="checkbox" name="row" value="{{ row.row_number }}" aria-label="Select {{ row.item_ref }}">{% endif %}</td>{% endif %}
+          <th scope="row">{{ row.item_ref }}</th>
+          <td>
+            {% if run.mode == "pay_bills" %}{{ row.display.carrier }}<span class="subline"><code>{{ row.display.destination }}</code>{% if row.display.ifsc %} · <code>{{ row.display.ifsc }}</code>{% endif %}</span>{% else %}{{ row.display.description }}{% if row.display.date %}<span class="subline">{{ row.display.date }}</span>{% endif %}{% endif %}
+          </td>
+          <td class="status status-{{ row.outcome }}">
+            <span class="pill">
+              {% if row.outcome in ("ready", "posted", "signed") %}
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3.5 8.5l3 3 6-6.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              {% elif row.outcome in ("review_sender_domain", "already_signed") %}
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7v3.5M8 5h.01" stroke-linecap="round"/></svg>
+              {% else %}
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 2.5L2 13.5h12L8 2.5z"/><path d="M8 6.5v3M8 11.5h.01" stroke-linecap="round"/></svg>
+              {% endif %}
+              {{ LABELS.get(row.outcome, row.outcome) }}{% if row.outcome == "cannot_verify" and row.missing %}: missing {{ row.missing|join(", ") }}{% endif %}
+            </span>
+            {% if row.posting %}<span class="subline">{{ row.posting.legal_payee }} → <strong>{{ row.posting.ledger_account }}</strong>{% if row.posting.posting_id %} · <code>{{ row.posting.posting_id }}</code>{% endif %}</span>{% endif %}
+            {% if row.payout %}<span class="subline">Payout: {{ row.payout.status }}{% if row.payout.provider_status %} / {{ row.payout.provider_status }}{% endif %}{% if row.payout.provider_id %} · <code>{{ row.payout.provider_id }}</code>{% endif %}</span>
+            {% if row.payout.note %}<span class="subline">{{ row.payout.note }}</span>{% endif %}{% endif %}
+          </td>
+          <td class="num">{{ row.display.amount }} {{ row.display.currency }}</td>
+        </tr>
+        <tr class="evidence" data-for="{{ row.row_number }}" hidden>
+          <td colspan="5">
+            <dl>
+              {% if row.decision.reason %}<dt>Why</dt><dd>{{ row.decision.reason }}</dd>{% endif %}
+              {% if row.display.reason %}<dt>Why</dt><dd>{{ row.display.reason }}</dd>{% endif %}
+              {% if row.missing %}<dt>Missing</dt><dd>{{ row.missing|join("; ") }}</dd>{% endif %}
+              {% if row.decision.owner %}<dt>Owner</dt><dd>{{ row.decision.owner }}</dd>{% endif %}
+              {% if row.decision.next_step %}<dt>Next step</dt><dd>{{ row.decision.next_step }}</dd>{% endif %}
+              {% for key in ["destination", "approved_destination", "beneficiary_version", "ifsc", "sender", "date", "reference", "legal_payee", "ledger_account"] %}{% if row.display.get(key) %}<dt>{{ key|replace("_", " ") }}</dt><dd class="mono">{{ row.display[key] }}</dd>{% endif %}{% endfor %}
+              {% for ev in row.evidence %}<dt>Evidence</dt><dd>{{ ev.field_or_passage }}<span class="ev-source">{{ ev.source_type }} · {{ ev.source_ref }}{% if ev.record_date %} · record {{ ev.record_date }}{% endif %}{% if ev.retrieved_at %} · retrieved {{ ev.retrieved_at }}{% endif %}</span></dd>{% endfor %}
+            </dl>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <aside class="panel" aria-live="polite"><p class="panel-empty">Click any row on the left to inspect its proof, source dates and next step.</p></aside>
 </div>
+
 {% if run.mode == "pay_bills" and receipt.counts.get("ready", 0) %}
-<p class="signbar"><span class="selected">0 bills selected · Rs 0.00</span> <button type="submit">Review batch to approve</button></p>
+<div class="signbar">
+  <span class="selected">0 bills selected · Rs 0.00</span>
+  <button class="btn" type="submit" disabled>Review batch to approve</button>
+</div>
 {% endif %}
 </form>
 
 <section class="receipt">
-  <h2>Run receipt</h2>
-  <dl class="facts">
-    <dt>Held</dt><dd>{{ receipt.held }} (Rs {{ receipt.held_total }})</dd>
-    {% if run.mode == "pay_bills" %}
-    <dt>Signed</dt><dd>{{ receipt.signed }}</dd>
-    <dt>Submitted</dt><dd>{{ receipt.submitted }} (Rs {{ receipt.submitted_total }})</dd>
-    <dt>Processed</dt><dd>{{ receipt.processed }} (Rs {{ receipt.processed_total }})</dd>
-    <dt>Reconciled</dt><dd>{{ receipt.reconciled }}. {{ receipt.reconciled_note }}</dd>
-    {% else %}<dt>Posted</dt><dd>{{ receipt.posted }}</dd>{% endif %}
-    <dt>External calls</dt><dd>{{ receipt.cost.external_calls }} · {{ receipt.cost.crustdata_credits }} credits · ${{ receipt.cost.usd }} · Rs {{ receipt.cost.inr }}</dd>
-    <dt>Conversion</dt><dd>{{ receipt.cost.conversion }}</dd>
-    <dt>Model spend</dt><dd>{{ receipt.cost.model_spend }}</dd>
-    <dt>Personal data used</dt><dd>{{ receipt.personal_data.categories|join(", ") }}. {{ receipt.personal_data.shown_as }}</dd>
-    <dt>Retention</dt><dd>{{ receipt.personal_data.retention }}</dd>
-    <dt>Person lookups</dt><dd>{{ receipt.personal_data.person_lookups }}</dd>
-  </dl>
+  <h2>Run receipt — cost, outcomes &amp; privacy</h2>
+  <div class="receipt-grid">
+    <div class="receipt-block">
+      <h3>Outcomes &amp; cost ledger</h3>
+      <dl class="facts">
+        <dt>Held</dt><dd>{{ receipt.held }} (Rs {{ receipt.held_total }})</dd>
+        {% if run.mode == "pay_bills" %}
+        <dt>Signed</dt><dd>{{ receipt.signed }}</dd>
+        <dt>Submitted</dt><dd>{{ receipt.submitted }} (Rs {{ receipt.submitted_total }})</dd>
+        <dt>Processed</dt><dd>{{ receipt.processed }} (Rs {{ receipt.processed_total }})</dd>
+        <dt>Reconciled</dt><dd>{{ receipt.reconciled }}. {{ receipt.reconciled_note }}</dd>
+        {% else %}
+        <dt>Posted</dt><dd>{{ receipt.posted }}</dd>
+        {% endif %}
+        <dt>External calls</dt><dd>{{ receipt.cost.external_calls }} · {{ receipt.cost.crustdata_credits }} credits · ${{ receipt.cost.usd }} · <strong>Rs {{ receipt.cost.inr }}</strong></dd>
+        <dt>Conversion</dt><dd>{{ receipt.cost.conversion }}</dd>
+        <dt>Model spend</dt><dd>{{ receipt.cost.model_spend }}</dd>
+      </dl>
+    </div>
+
+    <div class="receipt-block">
+      <h3>Personal data &amp; privacy</h3>
+      <dl class="facts">
+        <dt>Data used</dt><dd>{{ receipt.personal_data.categories|join(", ") }}</dd>
+        <dt>Masking</dt><dd>{{ receipt.personal_data.shown_as }}</dd>
+        <dt>Retention</dt><dd>{{ receipt.personal_data.retention }}</dd>
+        <dt>Person lookups</dt><dd><strong>{{ receipt.personal_data.person_lookups }}</strong> (derived from call log)</dd>
+      </dl>
+    </div>
+  </div>
+
   {% if receipt.cost.calls %}
-  <table class="ledger calls"><thead><tr><th scope="col">Call</th><th scope="col">Status</th><th scope="col" class="num">Credits</th></tr></thead>
-  <tbody>{% for c in receipt.cost.calls %}<tr><td>{{ c.adapter }} <small>{{ c.endpoint }}</small></td><td>{{ c.status }}</td><td class="num">{{ c.cost_credits }}</td></tr>{% endfor %}</tbody></table>
+  <div class="table-wrap">
+    <table class="ledger calls">
+      <thead><tr><th scope="col">External call</th><th scope="col">Status</th><th scope="col" class="num">Credits</th></tr></thead>
+      <tbody>
+        {% for c in receipt.cost.calls %}
+        <tr><td><strong>{{ c.adapter }}</strong><span class="subline"><code>{{ c.endpoint }}</code></span></td><td><span class="pill">{{ c.status }}</span></td><td class="num">{{ c.cost_credits }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% endif %}
 </section>
 {% endblock %}

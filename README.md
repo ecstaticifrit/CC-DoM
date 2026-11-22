@@ -51,14 +51,14 @@ Track: Buying and paying. Only test money moves (RazorpayX test mode). Shared wo
   - Sender email domain differs from the carrier's recorded domain → **Review**, never an accusation. When `CRUSTDATA_API_KEY` is set, Crustdata `company_identify` corroborates the recorded domain.
   - The controller ticks ready bills, sees "Approve N bills for Rs X" with exact bills, destinations and beneficiary versions, and signs. The server rechecks each bill's fingerprint. Held or changed bills cannot be sent.
   - The approved intent, retry key and a 32-character reference are saved in SQLite before any RazorpayX call. A worker thread sends test payouts. After a crash it retries only with the same key and body, then looks the payout up by reference; more than one match → `pending_review` ([ADR 0001](docs/adr/0001-payout-recovery-never-replaces.md)). Uploading the same bills again shows **Already signed earlier** and pays nothing twice.
-- *Post bank lines.* Legal payee from client records, a registry citation or the vendor's legal page (the AWS contracting-party page is fetched live and quoted). The client's ledger rule sets the account. Possible duplicates are held; unknown descriptors are **Cannot verify** with the missing fact named. Zero payout calls.
+- *Post bank lines.* Legal payee from client records, a registry citation or the vendor's legal page (the AWS contracting-party page is fetched live and quoted). The client's ledger rule sets the account and writes one committed `posting_id`. Re-uploading the same statement (even renamed) replays the saved run by SHA-256 with zero new postings. Possible duplicates are held; unknown descriptors are **Cannot verify** with the missing fact named. Zero payout calls.
+- *Run allowance.* Each run enforces a credit cap and time cap (`kavach/config.toml` or overridden on the start page). When the allowance runs out, paid calls stop and dependent facts become **Cannot verify** while independent bills finish.
 - *Run receipt* (`/runs/{id}/receipt.json` and on the page): held, signed, submitted, processed and posted counts; every external call with its status and credits, converted to dollars and rupees with the rate shown; model spend (none); the personal data used, how it is masked, the retention policy and the person-lookup count from the call log (zero).
 
 **Not done at freeze (stated honestly):**
 
 - Live RazorpayX payouts need the team's test keys in `.env`. Without them, signed bills show "Payout not sent: RazorpayX test keys are missing". The exactly-once logic is tested against a fake provider that mimics Razorpay's idempotency.
 - Reconciliation against a bank statement and the T+3 reversal reopen are not built. The worker refreshes provider status (processed, reversed) but the page does not reopen reversed items yet.
-- The run allowance is shown but not yet enforced as a hard stop.
 - The two-person beneficiary change (callback + separate authorizer) is described in the next step text but has no screen yet.
 - MCA registry integration needs a data.gov.in key; the Swiggy payee cites the MCA record from client records.
 
@@ -146,7 +146,7 @@ Crustdata pricing on our pay-as-you-go account: 1 credit = $0.30 (dashboard). Ot
 
 **Where a person approves:** the controller signs the exact batch (bills, amounts, destinations, beneficiary versions). The AP lead records the callback. A separate authorizer approves a beneficiary change. An edit after sign-off voids the approval for that item only.
 
-**Cost ledger on the receipt:** Kavach saves every external call with the source, the status, the time and the credits it cost. The receipt shows the total in credits, dollars and rupees with the conversion rate used. The run allowance (`kavach/config.toml`: 600 seconds, 150 credits) is shown; enforcing it as a hard stop is not built yet.
+**Cost ledger on the receipt:** Kavach saves every external call with the source, the status, the time and the credits it cost. The receipt shows the total in credits, dollars and rupees with the conversion rate used. Each run enforces the time and credit allowance (`kavach/config.toml`: 600 seconds, 150 credits, or a lower cap set on the start page) before making new calls.
 
 ## The approaches you tried
 

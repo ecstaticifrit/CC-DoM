@@ -81,6 +81,19 @@ def evaluate_bills(rows: list[dict], records: dict, sources, today: date) -> lis
                    "A separate authorizer must approve the beneficiary update." if contact_text
                    else "No trusted contact is on record. Enrol one before this change can be confirmed.")
             also = (f" It also has the same carrier and amount as {seen_in_file[key]}." if key in seen_in_file else "")
+            sender = raw.get("sender_email", "")
+            domain = sender.partition("@")[2].lower().strip() if "@" in sender else ""
+            if domain and carrier.get("domain") and domain != carrier["domain"]:
+                corroborated = sources.company_domain(carrier["domain"])
+                if corroborated.get("call"):
+                    row.setdefault("calls", []).append(corroborated["call"])
+                if corroborated.get("status") != "budget_exceeded":
+                    row["evidence"].append({
+                        "source_type": "api_response" if corroborated.get("primary_domain") else "client_record",
+                        "source_ref": corroborated.get("source_ref", f"carrier {raw['carrier_id']} record"),
+                        "field_or_passage": f"primary_domain={corroborated.get('primary_domain') or carrier['domain']} (sender used {domain})",
+                        "record_date": None, "retrieved_at": corroborated.get("retrieved_at"),
+                    })
             out.append(_set(row, "hold_bank_change",
                             reason=f"Approved account {approved}; the bill requests {requested} ({why}). "
                                    "A bank branch does not prove who owns an account." + also,
@@ -119,6 +132,12 @@ def evaluate_bills(rows: list[dict], records: dict, sources, today: date) -> lis
             corroborated = sources.company_domain(carrier["domain"])
             if corroborated.get("call"):
                 row.setdefault("calls", []).append(corroborated["call"])
+            if corroborated.get("status") == "budget_exceeded":
+                out.append(_set(row, "cannot_verify",
+                                missing=["sender domain corroboration (run allowance reached)"],
+                                reason="Run allowance reached before corroborating the carrier domain. Bill is not released.",
+                                owner="Controller", next_step="Raise the run allowance or check the sender domain manually."))
+                continue
             dist = _edit_distance(domain, carrier["domain"])
             label = "a near-copy of" if dist <= 2 or carrier["domain"].split(".")[0] in domain else "different from"
             out.append(_set(row, "review_sender_domain",
