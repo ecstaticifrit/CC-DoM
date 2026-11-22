@@ -1,0 +1,3 @@
+# Legal payee comes from one registry, the vendor's own page, or a verified client record
+
+A legal payee is sourced, in order, from the MCA company master record (Indian companies, the only registry we integrate), the vendor's official legal-entity page (foreign companies, e.g. AWS's contracting-party page), a verified client onboarding record (sole proprietors, posting only), or a dated filing; otherwise the line is cannot verify. We rejected adding GST or other registries during the event because each needs a signup and adds failure modes, and we rejected name matches from a company directory because two of six name-only lookups returned the wrong company in our tests.
