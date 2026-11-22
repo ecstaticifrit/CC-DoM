@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from conftest import FakeProvider, bills_csv, make_client, upload
+from conftest import bills_csv, make_client, upload
 
 SAMPLES = Path(__file__).resolve().parent.parent / "data" / "samples"
 
@@ -18,7 +18,7 @@ def test_bank_change_with_mismatched_domain_corroborates_with_crustdata(client):
     assert receipt["cost"]["crustdata_credits"] == 0.2
 
 
-def test_reuploading_renamed_bank_statement_replays_saved_run_and_posting_ids(client, provider):
+def test_reuploading_renamed_bank_statement_replays_saved_run_and_posting_ids(client):
     text = (SAMPLES / "brief_bank_lines.csv").read_text()
     first = upload(client, "post_lines", text, filename="october.csv").headers["location"]
     second = upload(client, "post_lines", text, filename="october-copy.csv").headers["location"]
@@ -29,7 +29,6 @@ def test_reuploading_renamed_bank_statement_replays_saved_run_and_posting_ids(cl
     assert len(posting_ids) == 2
     assert len(set(posting_ids)) == 2
     assert all(pid.startswith("post_") for pid in posting_ids)
-    assert provider.calls == []
 
 
 def test_lower_credit_allowance_blocks_new_paid_calls_while_independent_bills_finish(client):

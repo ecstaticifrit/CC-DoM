@@ -34,10 +34,10 @@
     <div class="summary-item {% if receipt.held %}is-warn{% endif %}"><dt>Needs attention</dt><dd>{{ receipt.held }} · Rs {{ receipt.held_total }}</dd></div>
     {% if run.mode == "pay_bills" %}
     <div class="summary-item is-ok"><dt>Ready to sign</dt><dd>{{ receipt.counts.get("ready", 0) }} · Rs {{ receipt.ready_total }}</dd></div>
-    <div class="summary-item"><dt>Signed / Submitted</dt><dd>{{ receipt.signed }} / {{ receipt.submitted }}</dd></div>
+    <div class="summary-item"><dt>Signed / Paid per bank</dt><dd>{{ receipt.signed }} / {{ receipt.paid }}</dd></div>
     {% else %}
     <div class="summary-item is-ok"><dt>Posted once</dt><dd>{{ receipt.posted }} of {{ rows|length }}</dd></div>
-    <div class="summary-item"><dt>Payout calls</dt><dd>0 (disabled in this mode)</dd></div>
+    <div class="summary-item"><dt>Payments</dt><dd>None (this job only posts)</dd></div>
     {% endif %}
     <div class="summary-item"><dt>Live API cost</dt><dd>{{ receipt.cost.crustdata_credits }} cr · Rs {{ receipt.cost.inr }}</dd></div>
     {% else %}
@@ -46,6 +46,22 @@
     {% endif %}
   </dl>
 </section>
+
+
+{% if has_receipt and run.mode == "pay_bills" %}
+{% set v = receipt.this_run %}
+<section class="value" aria-labelledby="value-title">
+  <h2 id="value-title">What Kavach did in this run</h2>
+  <dl class="value-grid">
+    <div><dt>Bills checked</dt><dd>{{ v.rows }}<span>in {{ v.check_time }}, against client records and live sources</span></dd></div>
+    <div class="is-ok"><dt>Clean and on time</dt><dd>{{ v.ready }} · Rs {{ v.ready_total }}<span>ready for your sign-off, not delayed by the holds</span></dd></div>
+    <div class="is-warn"><dt>Stopped before money left</dt><dd>{{ v.bank_changes }} bank change{{ "s" if v.bank_changes != 1 }} · {{ v.duplicates }} duplicate{{ "s" if v.duplicates != 1 }} · {{ v.other_holds }} other<span>Rs {{ v.held_total }} held for review. Held money is not counted as savings.</span></dd></div>
+    <div><dt>Exceptions with owner and next step</dt><dd>{{ v.with_owner }} of {{ receipt.held }}</dd></div>
+    <div><dt>Paid twice</dt><dd>{{ v.bank_refs - v.distinct_bank_refs + v.double_debits }}<span>{{ v.distinct_bank_refs }} bank reference{{ "s" if v.distinct_bank_refs != 1 }} for {{ v.bills_signed }} signed bill{{ "s" if v.bills_signed != 1 }}, each in exactly one payment-file line{% if v.double_debits %}. The bank statement shows {{ v.double_debits }} double debit{{ "s" if v.double_debits != 1 }}{% endif %}</span></dd></div>
+    <div><dt>Cost of this run to Kavach</dt><dd>Rs {{ v.kavach_cost_inr }}<span>Fee: Rs {{ "{:,}".format(v.fee_inr) }} per weekly run of up to {{ v.bills_included }} bills, {{ v.exceptions_included }} exceptions included</span></dd></div>
+  </dl>
+</section>
+{% endif %}
 
 <div class="banner banner-err conn" role="status" hidden>
   <svg class="banner-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M10 3L2 17h16L10 3z"/><path d="M10 8.5v3.5M10 14.5h.01" stroke-linecap="round"/></svg>
@@ -61,7 +77,7 @@
     {% if receipt.counts.get("ready", 0) %}
       <strong>Next step:</strong> Click any held row to inspect its proof and owner. Tick the ready bills you want to pay, then click <strong>Review batch to approve</strong> below.
     {% elif receipt.signed %}
-      <strong>Batch signed.</strong> Approved bills are saved in the outbox. Refresh or restart anytime — Kavach will never pay a bill twice.
+      <strong>Batch signed.</strong> The signed bills are in a bank payment file below. Refresh or restart anytime: Kavach never puts a bill in a second file.
     {% else %}
       <strong>Review required.</strong> No bills are eligible for sign-off right now. Inspect each exception on the right.
     {% endif %}
@@ -74,12 +90,7 @@
 </div>
 {% endif %}
 
-{% if can_select and not provider_ready %}
-<div class="banner banner-warn">
-  <svg class="banner-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M10 3L2 17h16L10 3z"/><path d="M10 8.5v3.5M10 14.5h.01" stroke-linecap="round"/></svg>
-  <div>RazorpayX test keys are not set in <code>.env</code> yet. Signed bills stay safely queued in the outbox as "Payout not sent" until keys are added.</div>
-</div>
-{% endif %}
+
 
 {% if can_select %}<form method="post" action="/runs/{{ run.run_id }}/confirm" class="batch">{% endif %}
 <div class="workspace">
@@ -114,8 +125,7 @@
               {{ labels.get(row.outcome, row.outcome) }}{% if row.outcome == "cannot_verify" and row.missing %}: missing {{ row.missing|join(", ") }}{% endif %}
             </span>
             {% if row.posting %}<span class="subline">{{ row.posting.legal_payee }} → <strong>{{ row.posting.ledger_account }}</strong>{% if row.posting.posting_id %} · <code>{{ row.posting.posting_id }}</code>{% endif %}</span>{% endif %}
-            {% if row.payout %}<span class="subline">Payout: {{ row.payout.status }}{% if row.payout.provider_status %} / {{ row.payout.provider_status }}{% endif %}{% if row.payout.provider_id %} · <code>{{ row.payout.provider_id }}</code>{% endif %}</span>
-            {% if row.payout.note %}<span class="subline">{{ row.payout.note }}</span>{% endif %}{% endif %}
+            {% if row.payout %}<span class="subline">File <code>{{ row.payout.file_id }}</code> · ref <code>{{ row.payout.reference_id }}</code> · {% if row.payout.status == "paid" %}<strong>Paid</strong>: statement line {{ row.payout.reconciled.line }}{% elif row.payout.status == "returned" %}<strong>Returned by the bank</strong>{% else %}Waiting for the bank statement{% endif %}</span>{% endif %}
           </td>
           <td class="num">{{ row.display.amount }} {{ row.display.currency }}</td>
         </tr>
@@ -129,7 +139,11 @@
               {% if decision.owner %}<dt>Owner</dt><dd>{{ decision.owner }}</dd>{% endif %}
               {% if decision.next_step %}<dt>Next step</dt><dd>{{ decision.next_step }}</dd>{% endif %}
               {% for key in ["destination", "approved_destination", "beneficiary_version", "ifsc", "sender", "date", "reference", "legal_payee", "ledger_account"] %}{% if row.display.get(key) %}<dt>{{ key|replace("_", " ") }}</dt><dd class="mono">{{ row.display[key] }}</dd>{% endif %}{% endfor %}
-              {% for ev in row.evidence %}<dt>Evidence</dt><dd>{{ ev.field_or_passage }}<span class="ev-source">{{ ev.source_type }} · {{ ev.source_ref }}{% if ev.record_date %} · record {{ ev.record_date }}{% endif %}{% if ev.retrieved_at %} · retrieved {{ ev.retrieved_at }}{% endif %}</span></dd>{% endfor %}
+              {% for ev in row.evidence %}{% set live = ev.source_ref.startswith("Crustdata") %}<dt>{% if live %}Live check{% else %}Evidence{% endif %}</dt><dd{% if live %} class="ev-live"{% endif %}>{% if live %}<strong>Crustdata company directory</strong> confirms the carrier's recorded web domain. It does not prove who sent the email. {% endif %}{{ ev.field_or_passage }}<span class="ev-source">{{ ev.source_type }} · {{ ev.source_ref }}{% if ev.record_date %} · record {{ ev.record_date }}{% endif %}{% if ev.retrieved_at %} · retrieved {{ ev.retrieved_at }}{% endif %}</span></dd>{% endfor %}
+              {% set change = (run.changes or {}).get(row.row_number) if run.changes is defined else none %}
+              {% if change %}<dt>Bank change</dt><dd>{{ change.status|replace("_", " ") }}{% if change.callback_by %} · callback by {{ change.callback_by }}{% endif %}{% if change.authorized_by %} · authorized by {{ change.authorized_by }}{% endif %}</dd>{% endif %}
+              {% if has_receipt and row.outcome == "hold_bank_change" %}<dt>Action</dt><dd><a class="btn btn-sm" href="/runs/{{ run.run_id }}/rows/{{ row.row_number }}/change">Record callback and authorization</a></dd>{% endif %}
+              {% if row.payout %}<dt>Payment</dt><dd>Bank reference <code>{{ row.payout.reference_id }}</code> in payment file <code>{{ row.payout.file_id }}</code>.{% if row.payout.reconciled %} Paid: one statement debit (line {{ row.payout.reconciled.line }}{% if row.payout.reconciled.date %}, {{ row.payout.reconciled.date }}{% endif %}) has this reference, amount and currency.{% endif %}{% if row.payout.returned %} Returned: statement line {{ row.payout.returned.line }} credits it back.{% endif %}</dd>{% endif %}
             </dl>
           </td>
         </tr>
@@ -148,6 +162,55 @@
 {% endif %}
 {% if can_select %}</form>{% endif %}
 
+{% if has_receipt and run.mode == "pay_bills" and receipt.signed %}
+<section class="receipt" id="payment-file">
+  <h2>Bank payment file</h2>
+  <p class="lead">Kavach does not move money. Download the file, check its fingerprint, and upload it to your bank's bulk-payment screen. Each signed bill is in exactly one line of one file, ever. Downloading again gives the same bytes; it never creates new payments.</p>
+  <div class="table-wrap">
+    <table class="ledger calls">
+      <thead><tr><th scope="col">File</th><th scope="col">Bills</th><th scope="col" class="num">Total</th><th scope="col">SHA-256</th><th scope="col">Downloads</th><th scope="col"><span class="sr">Download</span></th></tr></thead>
+      <tbody>
+        {% for f in run.files %}
+        <tr>
+          <th scope="row"><code>{{ f.file_id }}</code><span class="subline">signed by {{ f.signed_by }} · {{ f.created_at }}</span></th>
+          <td>{{ f.bills }}</td>
+          <td class="num">Rs {{ f.total }}</td>
+          <td><code title="{{ f.sha256 }}">{{ f.sha256[:16] }}…</code></td>
+          <td>{{ f.downloads }}</td>
+          <td><a class="btn btn-sm" href="/runs/{{ run.run_id }}/files/{{ f.file_id }}.csv" download>Download CSV</a></td>
+        </tr>
+        {% if stale.get(f.file_id) %}
+        <tr><td colspan="6"><div class="banner banner-err" role="alert"><div><strong>Do not upload this file as it is.</strong> The beneficiary changed after sign-off for {{ stale[f.file_id]|join(", ") }}. The file still pays the account that was approved at sign-off.</div></div></td></tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="subline">The file holds full account numbers because the bank needs them. Every other screen and export shows only the last 4 digits.</p>
+</section>
+
+<section class="receipt" id="reconcile">
+  <h2>Reconcile against the bank statement</h2>
+  {% if recon_error %}<div class="banner banner-err" role="alert"><div>{{ recon_error }}</div></div>{% endif %}
+  <p class="lead">A bill is <strong>paid</strong> only when exactly one statement debit carries its bank reference with the same amount and currency. Two debits mean a possible double payment by the bank. A credit with the reference is a returned payment and reopens the bill.</p>
+  <form class="receipt-block" method="post" action="/runs/{{ run.run_id }}/reconcile" enctype="multipart/form-data">
+    <p>Columns: <code>date, description, amount, currency, reference</code>, and optionally <code>type</code> (debit or credit). The reference can also be in the description.</p>
+    <input type="file" name="file" accept=".csv,text/csv" required>
+    <button class="btn btn-sm" type="submit">Reconcile statement</button>
+  </form>
+  {% if receipt.reconciliation %}
+  {% set rc = receipt.reconciliation %}
+  <dl class="facts">
+    <dt>Source</dt><dd>{{ rc.source }} · {{ rc.at }}</dd>
+    <dt>Paid per bank</dt><dd><strong>{{ receipt.paid }}</strong> of {{ receipt.signed }} signed bills (Rs {{ receipt.paid_total }})</dd>
+    <dt>Returned</dt><dd>{{ receipt.returned }}</dd>
+    <dt>Statement lines read</dt><dd>{{ rc.lines }} ({{ rc.unlinked_lines }} not linked to this run)</dd>
+    {% for o in rc.open %}<dt>Open: {{ o.bill_id }}</dt><dd>{{ o.reason }}</dd>{% endfor %}
+  </dl>
+  {% endif %}
+</section>
+{% endif %}
+
 {% if has_receipt %}
 <section class="receipt">
   <h2>Run receipt — cost, outcomes &amp; privacy</h2>
@@ -158,9 +221,10 @@
         <dt>Held</dt><dd>{{ receipt.held }} (Rs {{ receipt.held_total }})</dd>
         {% if run.mode == "pay_bills" %}
         <dt>Signed</dt><dd>{{ receipt.signed }}</dd>
-        <dt>Submitted</dt><dd>{{ receipt.submitted }} (Rs {{ receipt.submitted_total }})</dd>
-        <dt>Processed</dt><dd>{{ receipt.processed }} (Rs {{ receipt.processed_total }})</dd>
-        <dt>Reconciled</dt><dd>{{ receipt.reconciled }}. {{ receipt.reconciled_note }}</dd>
+        <dt>In payment file</dt><dd>{{ receipt.signed }} (Rs {{ receipt.signed_total }})</dd>
+        <dt>Paid per bank</dt><dd>{{ receipt.paid }} (Rs {{ receipt.paid_total }}). {{ receipt.reconciled_note }}</dd>
+        <dt>Waiting for bank</dt><dd>{{ receipt.waiting_for_bank }}</dd>
+        <dt>Returned</dt><dd>{{ receipt.returned }}</dd>
         {% else %}
         <dt>Posted</dt><dd>{{ receipt.posted }}</dd>
         {% endif %}
@@ -175,6 +239,7 @@
       <dl class="facts">
         <dt>Data used</dt><dd>{{ receipt.personal_data.categories|join(", ") }}</dd>
         <dt>Masking</dt><dd>{{ receipt.personal_data.shown_as }}</dd>
+        {% if receipt.personal_data.payment_file %}<dt>Payment file</dt><dd>{{ receipt.personal_data.payment_file }}</dd>{% endif %}
         <dt>Retention</dt><dd>{{ receipt.personal_data.retention }}</dd>
         <dt>Person lookups</dt><dd><strong>{{ receipt.personal_data.person_lookups }}</strong> (derived from call log)</dd>
       </dl>

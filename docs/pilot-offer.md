@@ -6,14 +6,14 @@ Ticket: `.scratch/friday-payment-run/issues/15-measure-pilot-offer.md`. Words fo
 
 **Rs 2,000 per weekly payment run of up to 100 bills.** The price includes evidence gathering and follow-up tracking for up to five exceptions.
 
-- Bank payout fees are separate. The provider charges them to the client directly.
+- Bank transfer fees are separate. The client's bank charges them directly.
 - Extra bills or exceptions are agreed in writing before the run. There is no charge per alert.
 
 ## 2. Who does what
 
 | Work | Done by |
 | --- | --- |
-| Compare bills with beneficiaries and payment history; find discrepancies; gather evidence; prepare the batch; track every exception to an owner and next step; pay signed bills once in the provider's test or live mode; reconcile; write the run receipt | **Kavach** |
+| Compare bills with beneficiaries and payment history; find discrepancies; gather evidence; prepare the batch; track every exception to an owner and next step; write each signed bill into exactly one bank payment file; reconcile against the bank statement; write the run receipt | **Kavach** |
 | Callback to the trusted contact for a beneficiary change | **Client's AP lead** |
 | Authorize a beneficiary update | **Client's authorizer** (a different person from the AP lead) |
 | Sign the batch | **Client's controller** |
@@ -23,7 +23,7 @@ Kavach never contacts a carrier and never changes a beneficiary.
 ## 3. The pilot (paid, read-only)
 
 1. The client gives one historical payment run: bills, beneficiaries, payment history, statement and the known outcome.
-2. Kavach runs it read-only. No payout credentials. No carrier contact.
+2. Kavach runs it read-only. No bank access. No carrier contact.
 3. The client's team re-does the same run its usual way, or uses its own timesheet from the original run.
 4. Both sides fill in the scorecard below. Success targets are agreed with the controller before the pilot starts.
 

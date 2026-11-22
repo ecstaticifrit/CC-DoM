@@ -1,7 +1,9 @@
+import csv
+import io
 import re
 from pathlib import Path
 
-from conftest import FakeProvider, make_client, upload
+from conftest import make_client, upload
 
 SAMPLES = Path(__file__).resolve().parent.parent / "data" / "samples"
 
@@ -15,50 +17,57 @@ def sign_all_ready(client, run_url):
     return confirm
 
 
-def payout_ids(client, run_url):
+def bank_refs(client, run_url):
     rows = client.get(f"{run_url}/result.json").json()["rows"]
-    return {r["item_ref"]: r["payout"]["provider_id"] for r in rows if r["payout"] and r["payout"]["provider_id"]}
+    return {r["item_ref"]: r["payout"]["reference_id"] for r in rows if r["payout"]}
 
 
-def test_five_bills_sign_three_and_exactly_three_test_payouts(client, provider):
+def file_rows(client, run_url):
+    files = client.get(f"{run_url}/result.json").json()["payment_files"]
+    out = []
+    for f in files:
+        text = client.get(f"{run_url}/files/{f['file_id']}.csv").text
+        out += list(csv.DictReader(io.StringIO(text)))
+    return files, out
+
+
+def test_five_bills_sign_three_and_get_exactly_three_payment_lines(client):
     run_url = upload(client, "pay_bills", (SAMPLES / "friday_bills.csv").read_text()).headers["location"]
-    assert provider.calls == []
+    assert client.get(f"{run_url}/result.json").json()["payment_files"] == []
     confirm = sign_all_ready(client, run_url)
     assert "Approve 3 bills for Rs 72,950.00" in confirm.text
-    client.app.state.worker.tick()
-    ids = payout_ids(client, run_url)
-    assert set(ids) == {"C-101", "C-102", "C-103"}
-    assert len(set(ids.values())) == 3
+    files, lines = file_rows(client, run_url)
+    assert len(files) == 1 and files[0]["bills"] == 3
+    assert sorted(ln["bill_id"] for ln in lines) == ["C-101", "C-102", "C-103"]
+    assert len({ln["bank_reference"] for ln in lines}) == 3
+    assert set(bank_refs(client, run_url)) == {"C-101", "C-102", "C-103"}
 
 
-def test_uploading_twice_and_signing_again_creates_no_second_payment(client, provider):
+def test_uploading_twice_and_signing_again_creates_no_second_payment_line(client):
     text = (SAMPLES / "friday_bills.csv").read_text()
     first = upload(client, "pay_bills", text).headers["location"]
     sign_all_ready(client, first)
-    client.app.state.worker.tick()
     second = upload(client, "pay_bills", text, filename="renamed.csv").headers["location"]
     outcomes = {r["item_ref"]: r["outcome"] for r in client.get(f"{second}/result.json").json()["rows"]}
     assert outcomes["C-101"] == "already_signed"
     sign_all_ready(client, second)
-    client.app.state.worker.tick()
-    assert len(provider.payouts) == 3
+    assert client.get(f"{second}/result.json").json()["payment_files"] == []
+    assert len(file_rows(client, first)[1]) == 3
 
 
-def test_kill_after_provider_accepts_recovers_the_same_payouts(db_path):
-    provider = FakeProvider()
-    provider.fail_next = 3
-    client = make_client(db_path, provider)
+def test_kill_after_sign_off_returns_the_same_file_and_references(db_path):
+    client = make_client(db_path)
     run_url = upload(client, "pay_bills", (SAMPLES / "friday_bills.csv").read_text()).headers["location"]
     sign_all_ready(client, run_url)
-    client.app.state.worker.tick()
-    restarted = make_client(db_path, provider)
-    restarted.app.state.worker.tick()
-    ids = payout_ids(restarted, run_url)
-    assert set(ids) == {"C-101", "C-102", "C-103"}
-    assert len(provider.payouts) == 3
+    files, lines = file_rows(client, run_url)
+    restarted = make_client(db_path)
+    files2, lines2 = file_rows(restarted, run_url)
+    assert [f["sha256"] for f in files2] == [f["sha256"] for f in files] and lines2 == lines
+    assert restarted.get(f"{run_url}/result.json").json()["payment_files"][0]["downloads"] == 2
+    assert bank_refs(restarted, run_url) == bank_refs(client, run_url)
 
 
-def test_brief_bank_lines_post_twice_hold_one_and_leave_sharma_unposted(client, provider):
+def test_brief_bank_lines_post_twice_hold_one_and_leave_sharma_unposted(client):
     run_url = upload(client, "post_lines", (SAMPLES / "brief_bank_lines.csv").read_text()).headers["location"]
     rows = client.get(f"{run_url}/result.json").json()["rows"]
     got = [(r["outcome"], (r["posting"] or {}).get("legal_payee"), (r["posting"] or {}).get("ledger_account")) for r in rows]
@@ -68,4 +77,3 @@ def test_brief_bank_lines_post_twice_hold_one_and_leave_sharma_unposted(client, 
         ("hold_possible_duplicate", None, None),
         ("cannot_verify", None, None),
     ]
-    assert provider.calls == []

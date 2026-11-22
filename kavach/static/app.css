@@ -57,6 +57,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
 ::selection { background: var(--accent-soft); color: var(--text-primary); }
 
 html {
@@ -739,3 +740,46 @@ h2 {
   .evidence:not([hidden]) { display: table-row; background: var(--bg-page); }
   main { padding: 1.25rem 1rem 3rem; }
 }
+
+/* New outcome states */
+.status-reopened_reversed .pill {
+  background: var(--err-bg);
+  border-color: var(--err-border);
+  color: var(--err-fg);
+}
+
+/* Value block: what this run did */
+.value {
+  margin: 1rem 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+}
+.value h2 { font-size: 1rem; margin: 0 0 0.75rem; }
+.value-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem 1.25rem;
+  margin: 0;
+}
+.value-grid dt { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; }
+.value-grid dd { margin: 0.15rem 0 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.value-grid dd span { display: block; font-weight: 400; font-size: 0.8rem; color: var(--text-secondary); }
+.value-grid .is-ok dd { color: var(--ok-fg); }
+.value-grid .is-warn dd { color: var(--warn-fg); }
+
+/* Live source evidence */
+.ev-live {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-sm);
+}
+
+/* Bank change screen */
+.change-steps { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); margin: 1rem 0; }
+.change-steps form { display: grid; gap: 0.6rem; }
+.change-steps label { display: grid; gap: 0.25rem; font-weight: 500; }
+.change-steps input[type="text"] { font: inherit; padding: 0.45rem 0.6rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
+.change-steps .is-done { opacity: 0.75; }

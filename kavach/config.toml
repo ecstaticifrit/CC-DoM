@@ -1,5 +1,5 @@
 rule_version = "2026-11-22.1"
-sandbox_label = "Sandbox: RazorpayX test mode. No real money moves."
+sandbox_label = "Test data. Kavach writes a bank payment file; it never moves money."
 
 [limits]
 run_seconds = 600
@@ -12,3 +12,8 @@ rate_date = "third-party quote, Oct 2026; update on the day"
 
 [privacy]
 retention_days = 30
+
+[offer]
+fee_inr = 2000
+bills_included = 100
+exceptions_included = 5

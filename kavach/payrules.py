@@ -101,7 +101,7 @@ def evaluate_bills(rows: list[dict], records: dict, sources, today: date) -> lis
             continue
 
         if dup or key in seen_in_file:
-            earlier = dup["bill_id"] + f" (paid {dup['paid_on']})" if dup else seen_in_file[key]
+            earlier = dup["bill_id"] + f" ({dup.get('kind', 'paid')} {dup['paid_on']})" if dup else seen_in_file[key]
             out.append(_set(row, "hold_possible_duplicate",
                             reason=f"Same carrier, amount and currency as {earlier}. Possible duplicate, not proven.",
                             owner="AP lead", next_step="Confirm with the carrier statement whether this is a second charge.",

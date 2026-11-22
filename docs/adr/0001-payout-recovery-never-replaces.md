@@ -1,3 +1,5 @@
 # Payout recovery reuses the saved intent and never replaces a payout
 
+**Status: superseded by [ADR 0004](0004-bank-payment-file.md).** Kavach no longer calls a payout provider.
+
 Before any provider call we save the approved payout intent, a provider retry key, the exact request body and our own 40-character reference in one SQLite transaction. After a timeout or kill we retry only with the same key and body, then look the payout up by source account and reference; if exactly one matching payout is not found, the item becomes pending review and stays locked. We chose this over "retry with a new key" or "auto-replace failed payouts" because the provider warns that a fresh key while the first attempt is in flight pays twice, and a double payment is worse than a delayed one.

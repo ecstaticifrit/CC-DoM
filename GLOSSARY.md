@@ -58,29 +58,21 @@ _Avoid_: Enrolled contact, known contact, vendor email
 The AP lead's confirmation of a requested beneficiary change through the trusted contact.
 _Avoid_: Verification call, OOB check
 
-**Payout**:
-A transfer of money to a beneficiary through the payment provider, in test mode for this event.
-_Avoid_: Payment (when meaning the provider transfer), transfer
+**Payment file**:
+The frozen bulk-transfer CSV for one sign-off, which the controller uploads to the client's bank; Kavach never moves money itself.
+_Avoid_: Payout, export, batch file
 
-**Submitted**:
-The provider received the payout request.
-_Avoid_: Paid, sent
+**Bank reference**:
+The reference Kavach gives one signed bill (`KV` + bill ID); it appears in exactly one payment-file line and on the bank statement.
+_Avoid_: UTR, payout ID
 
-**Processed**:
-The provider reports the payout as completed.
-_Avoid_: Paid, settled
+**Paid**:
+A signed bill whose bank reference, amount and currency match exactly one debit on the bank statement.
+_Avoid_: Sent, processed, reconciled (alone)
 
-**Reconciled**:
-A processed payout is uniquely matched to one statement debit by reference, amount and currency.
-_Avoid_: Matched (alone), cleared
-
-**Reversal**:
-A processed payout that the bank later returns, reopening the bill.
-_Avoid_: Refund, failure
-
-**Pending review**:
-A payout whose provider outcome cannot be established safely; it stays locked and is never replaced automatically.
-_Avoid_: Unknown, stuck
+**Returned payment**:
+A statement credit with a paid bill's bank reference; it reopens the bill.
+_Avoid_: Refund, reversal, failure
 
 ## Recording charges
 
