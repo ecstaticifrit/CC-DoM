@@ -1,0 +1,40 @@
+{
+  "carriers": {
+    "CAR-1": {
+      "name": "Blue Dart Express Limited",
+      "domain": "bluedart.com",
+      "beneficiaries": [
+        {"version": 2, "account_number": "502000112341234", "ifsc": "HDFC0000053", "status": "active", "authorized_at": "2026-09-12"},
+        {"version": 1, "account_number": "502000110005555", "ifsc": "HDFC0000053", "status": "retired", "authorized_at": "2025-04-01"}
+      ],
+      "trusted_contact": {"role": "Accounts receivable manager", "record_id": "TC-0101", "enrolled_at": "2026-09-12"}
+    },
+    "CAR-2": {
+      "name": "VRL Logistics Limited",
+      "domain": "vrlgroup.in",
+      "beneficiaries": [
+        {"version": 1, "account_number": "00431100022227777", "ifsc": "SBIN0000691", "status": "active", "authorized_at": "2026-09-20"}
+      ],
+      "trusted_contact": {"role": "Finance executive", "record_id": "TC-0202", "enrolled_at": "2026-09-20"}
+    },
+    "CAR-3": {
+      "name": "Shree Ganesh Roadlines (proprietor)",
+      "domain": null,
+      "beneficiaries": [
+        {"version": 1, "account_number": "917020045673333", "ifsc": "UTIB0000004", "status": "active", "authorized_at": "2026-10-01"}
+      ],
+      "trusted_contact": {"role": "Proprietor", "record_id": "TC-0303", "enrolled_at": "2026-10-01"}
+    },
+    "CAR-4": {
+      "name": "Navata Road Transport",
+      "domain": "navata.com",
+      "beneficiaries": [
+        {"version": 1, "account_number": "123400006789001", "ifsc": "ICIC0000001", "status": "active", "authorized_at": "2026-09-25"}
+      ],
+      "trusted_contact": null
+    }
+  },
+  "payment_history": [
+    {"bill_id": "C-090", "carrier_id": "CAR-2", "amount": "12500.00", "currency": "INR", "paid_on": "2026-11-14"}
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "client": {"name": "Sahyadri Freight Services Pvt Ltd (fictional client)"},
+  "descriptor_rules": [
+    {"pattern": "SWIGGY", "vendor_id": "V-SWIGGY"},
+    {"pattern": "AWS EMEA", "vendor_id": "V-AWS-EMEA"}
+  ],
+  "vendors": {
+    "V-SWIGGY": {
+      "legal_name": "Swiggy Limited",
+      "source": {"type": "registry", "ref": "MCA company master data, CIN L74110KA2013PLC096530", "record_date": null}
+    },
+    "V-AWS-EMEA": {
+      "legal_name": "Amazon Web Services EMEA SARL",
+      "source": {"type": "vendor_legal_page", "url": "https://aws.amazon.com/legal/aws-contracting-party/", "must_contain": "Amazon Web Services EMEA SARL"}
+    }
+  },
+  "ledger_rules": {
+    "V-SWIGGY": "staff meals",
+    "V-AWS-EMEA": "cloud hosting"
+  }
+}
