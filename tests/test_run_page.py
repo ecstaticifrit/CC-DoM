@@ -3,9 +3,9 @@ from conftest import bills_csv, upload
 
 def test_start_page_has_one_bill_upload_with_budget_and_sandbox_label(client):
     page = client.get("/").text
-    assert "Upload approved carrier bills" in page
+    assert "Upload approved supplier bills" in page
     assert 'name="mode"' not in page and "Post bank lines" not in page
-    assert "Run allowance" in page
+    assert "Credit limit" not in page and "per bill" in page
     assert "Sandbox" in page
 
 def test_valid_upload_creates_a_stable_run_url_listing_every_bill(client):

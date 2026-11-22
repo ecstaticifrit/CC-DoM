@@ -1,4 +1,4 @@
-# Kavach — close the Friday carrier payment run
+# Kavach — supplier payment runs
 
 "One carrier changed its bank account. Why should every other carrier miss Friday's payment? Kavach holds that bill, gets the rest ready for your sign-off, and gives you a receipt showing where every rupee went or why it is still waiting."
 
@@ -22,7 +22,7 @@ For public-source test data, see [dataset provenance and upload instructions](da
 
 **Who pays.** The logistics company's finance controller.
 
-**Price to test.** Rs 2,000 per weekly run of up to 100 bills. The price includes evidence and follow-up tracking for up to five exceptions. Bank payout fees are separate. There is no charge per alert. On labour alone, the fee must save 4 to 8 staff-hours per run (at an illustrative Rs 250 to Rs 500 per hour). See [`docs/pilot-offer.md`](docs/pilot-offer.md) for the offer, the paid read-only pilot and the scorecard.
+**Pricing.** Per bill, not per run or lookup. The rate and billable event are not set; the demo does not charge. Friday carrier payments are the hackathon example, not a restriction.
 
 ## What it does now
 
@@ -34,7 +34,7 @@ For public-source test data, see [dataset provenance and upload instructions](da
 
 **Working (tested):**
 
-- One upload starts the carrier payment run. The page shows the run allowance and the sandbox label before review.
+- One upload starts a supplier payment run. The demo uses fictional carrier bills.
 - You upload a CSV. A bad file gets a readable error. The error never repeats input values.
 - Each run is saved in SQLite (WAL mode) and has a stable URL (`/runs/{run_id}`). After a restart, the same URL shows the same run. You do not upload again.
 - A row with a missing required value stays visible as **Cannot verify**, and the page names the missing field.
@@ -51,7 +51,7 @@ For public-source test data, see [dataset provenance and upload instructions](da
   - Sender email domain differs from the carrier's recorded domain → **Review**, never an accusation. When `CRUSTDATA_API_KEY` is set, Crustdata `company_identify` corroborates the recorded domain.
   - The controller ticks ready bills, sees "Approve N bills for Rs X" with exact bills, destinations and beneficiary versions, and signs. The server rechecks each bill's fingerprint. Held or changed bills cannot be sent.
   - Signing debits the demo treasury and credits the approved carrier wallet. Approval, both balances and a stable `sim_` transfer ID commit together. Insufficient funds produces a failed attempt without moving money. Uploading the same bill again cannot transfer it twice.
-- *Run allowance.* Each run enforces a credit cap and time cap (`kavach/config.toml` or overridden on the start page). When the allowance runs out, paid calls stop and dependent facts become **Cannot verify** while independent bills finish.
+- Each run enforces internal credit and time limits. When a required check cannot finish, independent bills can still proceed.
 - *Run receipt* (`/runs/{id}/receipt.json` and on the page): held, signed, submitted, processed and posted counts; every external call with its status and credits, converted to dollars and rupees with the rate shown; model spend (none); the personal data used, how it is masked, the retention policy and the person-lookup count from the call log (zero).
 
 **Not done at freeze (stated honestly):**
@@ -141,7 +141,7 @@ Crustdata pricing on our pay-as-you-go account: 1 credit = $0.30 (dashboard). Ot
 
 **Where a person approves:** the controller signs the exact batch (bills, amounts, destinations, beneficiary versions). The AP lead records the callback. A separate authorizer approves a beneficiary change. An edit after sign-off voids the approval for that item only.
 
-**Cost ledger on the receipt:** Kavach saves every external call with the source, the status, the time and the credits it cost. The receipt shows the total in credits, dollars and rupees with the conversion rate used. Each run enforces the time and credit allowance (`kavach/config.toml`: 600 seconds, 150 credits, or a lower cap set on the start page) before making new calls.
+**Internal metering:** Kavach saves adapter calls and their costs in SQLite. Customer receipts show payment outcomes and source evidence, not internal expenses.
 
 ## The approaches you tried
 
@@ -167,10 +167,10 @@ Link: <add before submission>
 
 Two-minute storyboard:
 
-1. **0:00 Request in.** Choose Pay approved bills, upload five bills. Show the allowance and the sandbox label.
+1. **0:00 Request in.** Upload the five logistics demo bills.
 2. **0:20 Holds explained.** Open the changed-account hold: old and new account endings, evidence, owner (AP lead), next step, client cutoff. Open the possible-duplicate hold.
 3. **0:45 Sign 3.** "Approve 3 bills for Rs X". The confirmation lists the exact bills and masked destinations.
 4. **1:00 Kill.** Stop the process after signing. The page shows "Connection lost".
 5. **1:10 Restart.** Same run URL, three stable simulator IDs and unchanged wallet balances. Neither hold was paid.
 6. **1:30 Transfers.** Inspect each signed bill's simulated wallet movement.
-7. **1:50 Receipt.** Cost ledger (each call and its cost) and the personal-data block (masked fields, retention policy).
+7. **1:50 Receipt.** Show what cleared, what remains held, and the masking and retention disclosures.

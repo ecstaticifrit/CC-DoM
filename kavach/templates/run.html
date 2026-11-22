@@ -4,7 +4,6 @@
 {% set has_receipt = receipt is defined %}
 {% set can_select = has_receipt and run.mode == "pay_bills" and run.payout_mode == "simulation" %}
 {% set labels = LABELS|default({"not_checked": "Not checked yet", "cannot_verify": "Cannot verify"}) %}
-{% set allowance = receipt.allowance if has_receipt else config.limits %}
 <ol class="steps" aria-label="Workflow steps">
   <li class="done"><span class="step-num">1</span>Uploaded CSV</li>
   <li class="active"><span class="step-num">2</span>Review holds &amp; evidence</li>
@@ -18,7 +17,6 @@
       <div class="run-meta">
         <span>Run <code>{{ run.run_id }}</code></span>
         <span>Rules <code>{{ run.rule_version }}</code></span>
-        <span>Allowance {{ allowance.run_seconds // 60 }}m / {{ allowance.run_credits }} cr</span>
         <span>Updated <time class="updated">{{ run.updated_at }}</time></span>
       </div>
     </div>
@@ -39,7 +37,6 @@
     <div class="summary-item is-ok"><dt>Posted once</dt><dd>{{ receipt.posted }} of {{ rows|length }}</dd></div>
     <div class="summary-item"><dt>Payout calls</dt><dd>0 (disabled in this mode)</dd></div>
     {% endif %}
-    <div class="summary-item"><dt>Live API cost</dt><dd>{{ receipt.cost.crustdata_credits }} cr · Rs {{ receipt.cost.inr }}</dd></div>
     {% else %}
     <div class="summary-item"><dt>Rows</dt><dd>{{ rows|length }}</dd></div>
     <div class="summary-item"><dt>Needs attention</dt><dd>{{ rows|selectattr("outcome", "equalto", "cannot_verify")|list|length }}</dd></div>
@@ -145,7 +142,7 @@
 
 {% if has_receipt %}
 <section class="receipt">
-  <h2>Run receipt — cost, outcomes &amp; privacy</h2>
+  <h2>Run receipt — outcomes &amp; privacy</h2>
   {% if run.payout_mode == "simulation" %}
   <h3>Simulated money movement</h3>
   <p>No real money moves. These are local wallet balances, not bank confirmations.</p>
@@ -161,7 +158,7 @@
   {% endif %}
   <div class="receipt-grid">
     <div class="receipt-block">
-      <h3>Outcomes &amp; cost ledger</h3>
+      <h3>Payment outcomes</h3>
       <dl class="facts">
         <dt>Held</dt><dd>{{ receipt.held }} (Rs {{ receipt.held_total }})</dd>
         {% if run.mode == "pay_bills" %}
@@ -172,9 +169,6 @@
         {% else %}
         <dt>Posted</dt><dd>{{ receipt.posted }}</dd>
         {% endif %}
-        <dt>External calls</dt><dd>{{ receipt.cost.external_calls }} · {{ receipt.cost.crustdata_credits }} credits · ${{ receipt.cost.usd }} · <strong>Rs {{ receipt.cost.inr }}</strong></dd>
-        <dt>Conversion</dt><dd>{{ receipt.cost.conversion }}</dd>
-        <dt>Model spend</dt><dd>{{ receipt.cost.model_spend }}</dd>
       </dl>
     </div>
 
@@ -189,18 +183,7 @@
     </div>
   </div>
 
-  {% if receipt.cost.calls %}
-  <div class="table-wrap">
-    <table class="ledger calls">
-      <thead><tr><th scope="col">External call</th><th scope="col">Status</th><th scope="col" class="num">Credits</th></tr></thead>
-      <tbody>
-        {% for c in receipt.cost.calls %}
-        <tr><td><strong>{{ c.adapter }}</strong><span class="subline"><code>{{ c.endpoint }}</code></span></td><td><span class="pill">{{ c.status }}</span></td><td class="num">{{ c.cost_credits }}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endif %}
+
 </section>
 {% endif %}
 {% endblock %}

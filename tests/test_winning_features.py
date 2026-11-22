@@ -13,9 +13,9 @@ def test_bank_change_with_mismatched_domain_corroborates_with_crustdata(client):
     assert any("bluedart.com" in ev["field_or_passage"] for ev in c104["evidence"])
 
     receipt = client.get(f"{run_url}/receipt.json").json()
-    adapters = [c["adapter"] for c in receipt["cost"]["calls"]]
+    adapters = [c["adapter"] for c in receipt["live_checks"]]
     assert "crustdata.company_identify" in adapters
-    assert receipt["cost"]["crustdata_credits"] == 0.2
+    assert "cost" not in receipt and "allowance" not in receipt
 
 
 def test_start_page_does_not_offer_expense_samples(client):
@@ -36,8 +36,7 @@ def test_lower_credit_allowance_blocks_new_paid_calls_while_independent_bills_fi
     assert outcomes["C-104"] == "hold_bank_change"
 
     receipt = client.get(f"{run_url}/receipt.json").json()
-    assert receipt["cost"]["crustdata_credits"] == 0.0
-    assert any(c["status"] == "budget_exceeded" for c in receipt["cost"]["calls"])
+    assert any(c["status"] == "budget_exceeded" for c in receipt["live_checks"])
 
 
 def test_budget_exhausted_on_lookalike_review_marks_cannot_verify_not_ready(client):

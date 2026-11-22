@@ -66,7 +66,7 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
             return templates.TemplateResponse(request, "start.html", ctx(error=str(err)), status_code=400)
         input_hash = hashlib.sha256(data).hexdigest()
         try:
-            cap = float(run_credits) if run_credits.strip() else float(live_config["limits"]["run_credits"])
+            cap = min(float(live_config["limits"]["run_credits"]), float(run_credits)) if run_credits.strip() else float(live_config["limits"]["run_credits"])
         except ValueError:
             cap = float(live_config["limits"]["run_credits"])
         budgeted = BudgetedSources(sources, max_credits=max(0.0, cap), max_seconds=float(live_config["limits"]["run_seconds"]))
@@ -106,16 +106,10 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
         payouts = [r for r in rows if r["payout"]]
         submitted = [r for r in payouts if r["payout"]["status"] == "submitted"]
         processed = [r for r in submitted if r["payout"]["provider_status"] == "processed"]
-        credits = sum(c["cost_credits"] for c in run["calls"])
-        rate = config["costs"]
-        allowance = {**config["limits"]}
-        if run.get("allowance_credits") is not None:
-            allowance["run_credits"] = run["allowance_credits"]
         return {
             "run_id": run["run_id"], "mode": run["mode"], "payout_mode": run["payout_mode"] or "historical",
             "sandbox": config["sandbox_label"] if run["payout_mode"] else "Historical run; no new transfers.",
             "simulated_transfers": run["transfers"],
-            "allowance": allowance,
             "counts": {k: sum(1 for r in rows if r["outcome"] == k) for k in LABELS if any(r["outcome"] == k for r in rows)},
             "ready_total": total([r for r in rows if r["outcome"] == "ready"]),
             "held_total": total(held), "held": len(held),
@@ -123,15 +117,7 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
             "submitted_total": total(submitted), "processed_total": total(processed),
             "reconciled": 0, "reconciled_note": "Reconciliation needs a bank statement; none supplied in this run.",
             "posted": sum(1 for r in rows if r["outcome"] == "posted"),
-            "cost": {
-                "external_calls": len(run["calls"]), "crustdata_credits": round(credits, 2),
-                "usd": round(credits * rate["usd_per_credit"], 2),
-                "inr": round(credits * rate["usd_per_credit"] * rate["inr_per_usd"], 2),
-                "conversion": f"$1 = Rs {rate['inr_per_usd']} ({rate['rate_date']}); 1 credit = ${rate['usd_per_credit']}",
-                "model_spend": "None. No LLM is used: inputs are structured and rules decide.",
-                "sponsored": "Crustdata credits are hackathon-sponsored; costs shown at list price.",
-                "calls": run["calls"],
-            },
+            "live_checks": [{"adapter": c["adapter"], "status": c["status"]} for c in run["calls"]],
             "personal_data": {
                 "categories": ["carrier bank account numbers", "carrier names", "sender email addresses"] if run["mode"] == "pay_bills"
                               else ["bank statement descriptors", "vendor legal names"],
