@@ -130,6 +130,6 @@ def test_value_block_shows_outcomes_and_cost(client):
     run_url = upload(client, "pay_bills", (SAMPLES / "friday_bills.csv").read_text()).headers["location"]
     page = client.get(run_url).text
     assert "What Kavach did in this run" in page and "Held money is not counted as savings" in page
-    assert "Crustdata company directory" in page and "RazorpayX" not in page
+    assert "src-crustdata" in page and "RazorpayX" not in page
     v = client.get(f"{run_url}/receipt.json").json()["this_run"]
     assert (v["ready"], v["bank_changes"], v["duplicates"]) == (3, 1, 1)

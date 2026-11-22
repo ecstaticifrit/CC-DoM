@@ -8,7 +8,7 @@
 </ol>
 
 <h1>Approve {{ items|length }} bill{{ "s" if items|length != 1 }} for Rs {{ total }}</h1>
-<p class="lead">You are signing exactly these bills, amounts, masked destinations and beneficiary versions. Kavach rechecks every item on the server before acting. A held or changed bill cannot enter the file under this sign-off. Approving writes one bank payment file for these bills; Kavach does not move money.</p>
+<p class="lead">You are signing exactly these bills, amounts, destinations and bank account versions. Kavach checks every bill again before it signs. A held or changed bill cannot enter the file. Signing writes one bank payment file. Kavach does not move money.</p>
 
 <form method="post" action="/runs/{{ run.run_id }}/approve">
   <div class="table-wrap">

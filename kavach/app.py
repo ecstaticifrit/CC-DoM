@@ -94,7 +94,7 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
         if mode == "pay_bills":
             rows = evaluate_bills(rows, budgeted)
         else:
-            rows = postings.evaluate_lines(rows, current_records(), budgeted.fetch_page_text)
+            rows = postings.evaluate_lines(rows, current_records(), budgeted.fetch_page_text, sources=budgeted)
         run_id = store.create_run(mode, live_config["rule_version"], rows, input_hash=input_hash, allowance_credits=cap,
                                   eval_ms=int((time.monotonic() - started) * 1000))
         return RedirectResponse(f"/runs/{run_id}", status_code=303)
@@ -208,8 +208,14 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
     def run_page(request: Request, run_id: str):
         run = _run_or_404(run_id)
         rows = sorted(run["rows"], key=lambda r: (ATTENTION_ORDER.index(r["outcome"]) if r["outcome"] in ATTENTION_ORDER else 99, r["row_number"]))
+        groups: dict[str, list[str]] = {}
+        for r in rows:
+            if r["outcome"].startswith(ATTENTION):
+                groups.setdefault(r["outcome"], []).append(r["item_ref"])
         return templates.TemplateResponse(request, "run.html", ctx(
             run=run, rows=rows, mode_label=MODES[run["mode"]], receipt=_receipt(run),
+            fps=_fingerprints(run) if run["mode"] == "pay_bills" else {},
+            hold_groups=[{"outcome": k, "label": LABELS.get(k, k), "refs": v} for k, v in groups.items()],
             stale={f["file_id"]: stale_bills(f["file_id"]) for f in run["files"]},
             recon_error=request.query_params.get("recon_error", "")[:160]))
 

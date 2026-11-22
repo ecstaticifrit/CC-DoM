@@ -8,10 +8,12 @@
   "vendors": {
     "V-SWIGGY": {
       "legal_name": "Swiggy Limited",
+      "domain": "swiggy.com",
       "source": {"type": "registry", "ref": "MCA company master data, CIN L74110KA2013PLC096530", "record_date": null}
     },
     "V-AWS-EMEA": {
       "legal_name": "Amazon Web Services EMEA SARL",
+      "domain": "aws.com",
       "source": {"type": "vendor_legal_page", "url": "https://aws.amazon.com/legal/aws-contracting-party/", "must_contain": "Amazon Web Services EMEA SARL"}
     }
   },

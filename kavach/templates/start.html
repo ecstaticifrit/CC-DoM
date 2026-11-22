@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block main %}
 <ol class="steps" aria-label="Workflow steps">
-  <li class="active"><span class="step-num">1</span>Choose job &amp; upload CSV</li>
-  <li><span class="step-num">2</span>Review holds &amp; live evidence</li>
-  <li><span class="step-num">3</span>Approve clean batch &amp; receipt</li>
+  <li class="active"><span class="step-num">1</span>Upload</li>
+  <li><span class="step-num">2</span>Review the checks</li>
+  <li><span class="step-num">3</span>Sign and pay</li>
 </ol>
 
-<h1>Start a Friday payment run</h1>
-<p class="lead">Upload approved carrier bills or a bank statement. Kavach checks every row against client records and live external sources, holds risky items with proof, and lets you sign only what is clean.</p>
+<h1>Start a payment run</h1>
+<p class="lead">Upload approved carrier bills or a bank statement. Kavach checks each row against your client records and live sources, including the Crustdata company directory. It holds risky items, shows you why, and lets you sign only the clean ones.</p>
 
 {% if error %}
 <div class="banner banner-err" role="alert">
@@ -19,31 +19,31 @@
 <div class="start-grid">
   <form class="start-form" method="post" action="/runs" enctype="multipart/form-data">
     <fieldset class="field-group">
-      <legend>1. Select job</legend>
+      <legend>1. Choose a job</legend>
       <div class="mode-list">
         <label class="mode-option">
           <input type="radio" name="mode" value="pay_bills" checked>
           <span>
             <span class="mode-title">{{ modes.pay_bills }}</span>
-            <span class="mode-desc">Check carrier bills for bank changes, duplicates, IFSC and domain mismatches before sign-off.</span>
+            <span class="mode-desc">Check each bill for bank account changes, duplicates, bank branch codes and unknown sender domains before you sign.</span>
           </span>
         </label>
         <label class="mode-option">
           <input type="radio" name="mode" value="post_lines">
           <span>
             <span class="mode-title">{{ modes.post_lines }}</span>
-            <span class="mode-desc">Resolve legal payees with live evidence, assign ledger rules and hold duplicates. No payments.</span>
+            <span class="mode-desc">Find the legal payee for each charge, apply your ledger rules and hold duplicates. This job makes no payments.</span>
           </span>
         </label>
       </div>
     </fieldset>
 
     <div class="field-group">
-      <span class="field-label">2. Upload CSV file</span>
+      <span class="field-label">2. Upload a CSV file</span>
       <label class="dropzone">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#12355B" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-        <span class="dropzone-title">Drop a CSV here, or click to browse</span>
-        <span class="dropzone-sub">UTF-8 CSV up to 2 MB · full account numbers and emails stay masked on every screen</span>
+        <span class="dropzone-title">Drop a CSV file here, or select one</span>
+        <span class="dropzone-sub">UTF-8, up to 2 MB. Every screen shows only the last 4 digits of account numbers.</span>
         <span class="file-chosen" aria-live="polite"></span>
         <input type="file" name="file" accept=".csv,text/csv" required>
       </label>
@@ -51,32 +51,32 @@
 
     <div class="allowance-row">
       <span><strong>Run allowance:</strong> {{ config.limits.run_seconds // 60 }} minutes</span>
-      <label>Max credits <input class="allowance-input" type="number" name="run_credits" step="0.1" min="0" value="{{ config.limits.run_credits }}"></label>
-      <span><strong>Mode:</strong> Sandbox</span>
+      <label>Credit limit <input class="allowance-input" type="number" name="run_credits" step="0.1" min="0" value="{{ config.limits.run_credits }}"></label>
+      <span><strong>Mode:</strong> Sandbox, test data only</span>
     </div>
 
-    <button class="btn" type="submit">Start payment run</button>
+    <button class="btn" type="submit">Check this file</button>
   </form>
 
   <aside class="guide">
     <h2>Quick start</h2>
     <ol>
-      <li>Pick <strong>Pay approved bills</strong> or <strong>Post bank lines</strong>.</li>
-      <li>Upload your CSV (or download one of the sample files below).</li>
-      <li>Inspect held items and live evidence on the next screen.</li>
-      <li>Sign clean bills and download the cost &amp; privacy receipt.</li>
+      <li>Choose <strong>Pay approved bills</strong> or <strong>Post bank lines</strong>.</li>
+      <li>Upload a CSV file, or use a sample file below.</li>
+      <li>Select any row to see every check, its source and what it proves.</li>
+      <li>Sign the clean bills, then download the payment file and the receipt.</li>
     </ol>
 
-    <h2>Sample files to try</h2>
+    <h2>Sample files</h2>
     <ul class="sample-links">
       <li><a href="/samples/public_tariff_bills.csv" download>Speed Post tariff bills</a> (Pay approved bills): published INR prices, fictional bills and test-only accounts.</li>
       <li><a href="/samples/public_spending_gbp.csv" download>UK public spending</a> (Post bank lines): two published DWP hosting payments in GBP, not a bank statement.</li>
-      <li><a href="/samples/friday_bills.csv" download>friday_bills.csv</a> — 5 bills (3 ready, 1 bank change + Crustdata check, 1 possible duplicate)</li>
-      <li><a href="/samples/brief_bank_lines.csv" download>brief_bank_lines.csv</a> — 4 bank lines (Swiggy, AWS EMEA live fetch, duplicate AWS, Sharma unknown)</li>
-      <li><a href="/samples/friday_bank_statement.csv" download>friday_bank_statement.csv</a> — test bank statement for reconciling the signed Friday bills (upload it on the run page)</li>
+      <li><a href="/samples/friday_bills.csv" download>friday_bills.csv</a> — 5 bills: 3 clean, 1 bank account change, 1 possible duplicate</li>
+      <li><a href="/samples/brief_bank_lines.csv" download>brief_bank_lines.csv</a> — 4 bank lines: Swiggy, AWS, a second AWS charge, and an unknown payee</li>
+      <li><a href="/samples/friday_bank_statement.csv" download>friday_bank_statement.csv</a> — test bank statement. Upload it on the run page after you sign the sample bills.</li>
     </ul>
 
-    <h2>Expected CSV columns</h2>
+    <h2>Columns the CSV needs</h2>
     <code class="cols-code" data-expected-cols>bill_id, carrier_id, carrier_name, amount, currency, account_number, ifsc, sender_email</code>
   </aside>
 </div>

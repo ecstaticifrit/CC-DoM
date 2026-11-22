@@ -2,57 +2,57 @@
 {% block title %}Bank change · {{ row.item_ref }} · Kavach{% endblock %}
 {% block main %}
 {% set errors = {
-  "no_contact": "No trusted contact is on record for this carrier. Enrol one in client records before this change can be confirmed.",
+  "no_contact": "This carrier has no trusted contact on record. Add one to client records before anyone can confirm this change.",
   "callback_fields": "Enter who made the callback and choose the result.",
-  "no_callback": "Record a confirmed callback before authorizing.",
-  "authorizer_name": "Enter the authorizer's name.",
-  "same_person": "The authorizer must be a different person from the AP lead who made the callback.",
+  "no_callback": "Record a confirmed callback first. Then a second person can approve.",
+  "authorizer_name": "Enter the name of the person who approves.",
+  "same_person": "A different person must approve. The AP lead who made the callback cannot also approve the change.",
 } %}
-<p><a href="/runs/{{ run.run_id }}">← Back to run {{ run.run_id }}</a></p>
-<h1>Bank account change: {{ row.item_ref }}</h1>
-<p class="lead">{{ carrier.name }} · Rs {{ row.display.amount }} {{ row.display.currency }}. The bill stays held until two different people act: the AP lead confirms the change through the trusted contact, then an authorizer approves the new beneficiary version. Kavach never contacts the carrier and never changes a beneficiary on its own.</p>
+<p><a href="/runs/{{ run.run_id }}">Back to run {{ run.run_id }}</a></p>
+<h1>Confirm a bank account change for {{ row.item_ref }}</h1>
+<p class="lead">{{ carrier.name }} · Rs {{ row.display.amount }} {{ row.display.currency }}. This bill stays held until two different people act. First, the AP lead calls the carrier's trusted contact and records the answer. Then a second person approves the new bank account. Kavach never contacts the carrier and never changes a bank account by itself.</p>
 
 {% if error %}<div class="banner banner-err" role="alert"><div>{{ errors.get(error, "The request was not accepted.") }}</div></div>{% endif %}
 
 <dl class="facts receipt-block">
-  <dt>Approved account</dt><dd class="mono">{{ approved }}{% if approved_version %} (beneficiary v{{ approved_version }}){% endif %}</dd>
-  <dt>Bill requests</dt><dd class="mono">{{ requested }} · {{ row.display.ifsc }}</dd>
+  <dt>Approved account</dt><dd class="mono">{{ approved }}{% if approved_version %} (version {{ approved_version }}){% endif %}</dd>
+  <dt>This bill asks for</dt><dd class="mono">{{ requested }} · {{ row.display.ifsc }}</dd>
   <dt>Trusted contact</dt><dd>{% if carrier.trusted_contact %}{{ carrier.trusted_contact.role }} (client record {{ carrier.trusted_contact.record_id }}, enrolled {{ carrier.trusted_contact.enrolled_at }}){% else %}None on record{% endif %}</dd>
-  <dt>Current status</dt><dd>{% if change %}{{ change.status|replace("_", " ") }}{% else %}Waiting for callback{% endif %}</dd>
+  <dt>Status</dt><dd>{% if not change %}Waiting for the callback{% elif change.status == "callback_confirmed" %}Callback confirmed. Waiting for a second person to approve.{% elif change.status == "callback_denied" %}The contact did not confirm the change. The bill stays held.{% else %}Approved{% endif %}</dd>
   {% if row.decision.next_step %}<dt>Next step</dt><dd>{{ row.decision.next_step }}</dd>{% endif %}
 </dl>
 
 <div class="change-steps">
   <section class="receipt-block {% if change and change.status != 'callback_denied' %}is-done{% endif %}">
-    <h3>1. AP lead: record the callback</h3>
+    <h3>Step 1. AP lead: call the carrier</h3>
     {% if change and change.callback_by %}
-      <p>Recorded by <strong>{{ change.callback_by }}</strong> at {{ change.callback_at }} through {{ change.contact_record_id }}: {{ "confirmed" if change.status != "callback_denied" else "not confirmed" }}.</p>
+      <p><strong>{{ change.callback_by }}</strong> called {{ change.contact_record_id }} at {{ change.callback_at }}. Result: {{ "the contact confirmed the new account" if change.status != "callback_denied" else "the contact did not confirm it" }}.</p>
     {% endif %}
     {% if row.outcome == "hold_bank_change" and carrier.trusted_contact and (not change or change.status != "authorized") %}
     <form method="post" action="/runs/{{ run.run_id }}/rows/{{ row.row_number }}/callback">
-      <p>Call the trusted contact using the number in client record {{ carrier.trusted_contact.record_id }}. Do not use contact details from the invoice or email.</p>
+      <p>Call the number in client record {{ carrier.trusted_contact.record_id }}. Do not use a phone number or email from the invoice: a fraudster controls those.</p>
       <label>Your name (AP lead) <input type="text" name="callback_by" required autocomplete="name"></label>
       <label><input type="radio" name="outcome" value="confirmed" required> The contact confirmed the new account</label>
       <label><input type="radio" name="outcome" value="denied"> The contact did not confirm it</label>
-      <button class="btn btn-sm" type="submit">Record callback</button>
+      <button class="btn btn-sm" type="submit">Save the callback result</button>
     </form>
     {% endif %}
   </section>
 
   <section class="receipt-block">
-    <h3>2. Authorizer: approve the beneficiary update</h3>
+    <h3>Step 2. A second person: approve the new account</h3>
     {% if change and change.status == "authorized" %}
-      <p>Authorized by <strong>{{ change.authorized_by }}</strong> at {{ change.authorized_at }}. The bill was checked again with the new beneficiary version.</p>
+      <p><strong>{{ change.authorized_by }}</strong> approved the new account at {{ change.authorized_at }}. Kavach checked the bill again with the new account.</p>
     {% elif change and change.status == "callback_confirmed" %}
     <form method="post" action="/runs/{{ run.run_id }}/rows/{{ row.row_number }}/authorize">
-      <p>You approve a new beneficiary version ending {{ requested }} for {{ carrier.name }}. The earlier version is retired. The bill is then checked again; it still needs the controller's sign-off.</p>
-      <label>Your name (authorizer, not {{ change.callback_by }}) <input type="text" name="authorized_by" required autocomplete="name"></label>
-      <button class="btn btn-sm" type="submit">Authorize beneficiary update</button>
+      <p>You approve the account ending {{ requested }} for {{ carrier.name }}. The old account stops being used. Kavach then checks the bill again. The controller still signs it before payment.</p>
+      <label>Your name (not {{ change.callback_by }}) <input type="text" name="authorized_by" required autocomplete="name"></label>
+      <button class="btn btn-sm" type="submit">Approve the new account</button>
     </form>
     {% else %}
-      <p>Available after a confirmed callback.</p>
+      <p>This step opens after the AP lead records a confirmed callback.</p>
     {% endif %}
   </section>
 </div>
-<p class="subline">Names are typed, not signed in. A production version needs user accounts so that the two-person rule is enforced by login.</p>
+<p class="subline">People type their names here. There are no logins yet. A production version needs user accounts so that the system, not trust, enforces the two-person rule.</p>
 {% endblock %}

@@ -22,17 +22,21 @@ def failing_fetch(url):
     raise ConnectionError("network down")
 
 
+def check(row, name):
+    return next(ev for ev in row["evidence"] if ev["check"] == name)
+
+
 def test_brief_lines():
     out = evaluate_lines(parse("post_lines", BRIEF), RECORDS, fake_fetch)
     assert [r["outcome"] for r in out] == ["posted", "posted", "hold_possible_duplicate", "cannot_verify"]
     assert out[0]["posting"]["legal_payee"] == "Swiggy Limited"
     assert out[0]["posting"]["ledger_account"] == "staff meals"
     assert out[0]["posting"]["posting_id"].startswith("post_")
-    assert out[0]["evidence"][0]["source_type"] == "registry"
+    assert check(out[0], "Legal payee")["source_type"] == "registry"
     assert out[1]["posting"]["legal_payee"] == "Amazon Web Services EMEA SARL"
     assert out[1]["posting"]["ledger_account"] == "cloud hosting"
     assert out[1]["posting"]["posting_id"].startswith("post_")
-    ev = out[1]["evidence"][0]
+    ev = check(out[1], "Legal payee")
     assert ev["source_type"] == "web_page" and ev["retrieved_at"] == "2026-10-10T09:00:00Z"
     assert "Amazon Web Services EMEA SARL" in ev["field_or_passage"] and len(ev["field_or_passage"]) <= 130
     assert out[1]["calls"] == [{"adapter": "web", "endpoint": AWS_URL, "cost_credits": 0, "status": "ok"}]

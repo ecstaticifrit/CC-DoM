@@ -15,7 +15,9 @@ def test_bank_change_with_mismatched_domain_corroborates_with_crustdata(client):
     receipt = client.get(f"{run_url}/receipt.json").json()
     adapters = [c["adapter"] for c in receipt["cost"]["calls"]]
     assert "crustdata.company_identify" in adapters
-    assert receipt["cost"]["crustdata_credits"] == 0.2
+    crustdata = [c for c in receipt["cost"]["calls"] if c["adapter"].startswith("crustdata")]
+    assert receipt["cost"]["crustdata_credits"] == round(sum(c["cost_credits"] for c in receipt["cost"]["calls"]), 2) > 0
+    assert {c["adapter"] for c in crustdata} >= {"crustdata.company_identify", "crustdata.company_enrich", "crustdata.web_search_live"}
 
 
 def test_reuploading_renamed_bank_statement_replays_saved_run_and_posting_ids(client):
