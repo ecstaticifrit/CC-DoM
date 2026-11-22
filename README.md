@@ -1,10 +1,10 @@
 # Kavach — supplier payment runs
 
-"One carrier changed its bank account. Why should every other carrier miss Friday's payment? Kavach holds that bill, gets the rest ready for your sign-off, and gives you a receipt showing where every rupee went or why it is still waiting."
+Kavach checks approved supplier bills before payment. It holds the risky bills with their evidence, lets the controller sign the clean ones, and writes one bank payment file.
 
 Track: Buying and paying. Kavach does two jobs: **Pay approved bills** and **Post bank lines**. Kavach never moves money: it writes a bank payment file that the controller uploads to the bank. All data in this repo is test data. Shared words are in [`GLOSSARY.md`](GLOSSARY.md). Decisions are in [`docs/adr/`](docs/adr/).
 
-**Status labels in this file.** "Working" means the team tested it. "Not done at freeze" lists what is missing. Kavach does not claim anything works until a test or the live demo shows it.
+**Status labels in this file.** "Working (tested)" means an automated test covers it. "Not done" lists what is missing.
 
 ## The service
 
@@ -19,11 +19,11 @@ For the Speed Post bill sample, see [dataset provenance](data/SOURCES.md). Price
 5. Reconcile the signed bills against the bank statement.
 6. Post bank lines: find the legal payee and the ledger account for each bank line. Hold possible duplicates. Mark unknown payees **Cannot verify**.
 
-**Who does it today.** In-house AP (accounts payable) staff, outsourced payables desks, and freight payment firms such as Cass Information Systems.
+**Who does it today.** In-house AP (accounts payable) staff and outsourced payables desks.
 
 **Who pays.** The logistics company's finance controller.
 
-**Pricing.** Per bill, not per run or lookup. The rate and billable event are not set; the demo does not charge. Friday carrier payments are the hackathon example, not a restriction.
+**Pricing.** Per bill. The rate is not set. The demo does not charge.
 
 ## What it does now
 
@@ -43,19 +43,19 @@ For the Speed Post bill sample, see [dataset provenance](data/SOURCES.md). Price
 - A row with a missing required value stays visible as **Cannot verify**, and the page names the missing field.
 - Account numbers show only the last 4 digits. Emails show only the domain. This applies to the page, the organizer output and the logs.
 - The organizer output is at `GET /runs/{run_id}/result.json`. It reads the same saved run as the page.
-- The page polls `GET /runs/{run_id}/status.json`. If the server stops, the page shows "Connection lost" with the last update time. It reconnects to the same run.
+- The page polls `GET /runs/{run_id}/status.json` (tested). When a poll fails, the page script shows "Connection lost" with the last update time (not tested automatically).
 
 **Working (tested, with live IFSC and live AWS page calls):**
 
 - *Pay approved bills.* Kavach checks each bill against client records (`data/carriers.json`):
   - Bank account differs from the approved beneficiary version, or is a retired account → **Held: bank account changed**, with both masked endings, the trusted contact's role and record ID, and the next step.
   - Bill already paid → hold. Same carrier, amount and currency as a recent payment or an earlier row → **possible duplicate**, not proven.
-  - IFSC checked live at `ifsc.razorpay.com`; a 404 → **Held: invalid IFSC**. A branch never counts as proof of account ownership.
+  - IFSC checked live at `ifsc.razorpay.com`. If the approved IFSC returns 404 → **Held: invalid IFSC** (tested with a fake source). A branch never counts as proof of account ownership.
   - Sender email domain differs from the carrier's recorded domain → **Review**, never an accusation. When `CRUSTDATA_API_KEY` is set, Crustdata `company_identify` corroborates the recorded domain.
   - The controller ticks ready bills, sees "Approve N bills for Rs X" with exact bills, destinations and beneficiary versions, and signs. The server rechecks each bill's fingerprint. Held or changed bills cannot be sent.
   - Sign-off and the **bank payment file** are written in one SQLite transaction ([ADR 0004](docs/adr/0004-bank-payment-file.md)). Each bill gets one bank reference (`KV` + bill ID) and is in exactly one line of one file, ever. The file is frozen: every download returns the same bytes and SHA-256, also after a restart. Downloads are counted. Uploading the same bills again shows **Already signed earlier** and creates no new line.
 - *Post bank lines.* For each line, Kavach links the bank text to a merchant (client descriptor rule), checks the merchant domain with Crustdata `company_identify`, finds the legal payee (client registry record, or the vendor legal page fetched live through Crustdata `web_enrich_live` or directly), and applies the client ledger rule. A posted line gets a posting ID. A second line with the same payee, amount and date is **Held: possible duplicate**. A line that no source links to a payee is **Cannot verify**; Kavach runs a Crustdata `web_search_live` and shows the results as suggestions only. Uploading the same statement again (same SHA-256, any file name) opens the saved run with the same posting IDs.
-- Each run enforces a time limit and a credit limit (`kavach/config.toml`: 600 s, 150 credits). When a required check cannot finish, independent bills can still proceed.
+- Each run has a credit limit and a time limit (`kavach/config.toml`: 150 credits, 600 s). The credit limit is tested: when it runs out, the paid checks stop, the affected bill becomes **Cannot verify**, and independent bills still finish. The time limit is in the code but has no test.
 - *Run receipt* (`/runs/{id}/receipt.json` and on the page): held, signed, paid per bank, waiting and returned counts; the personal data used, how it is masked, the retention policy, payment-file downloads and the person-lookup count from the call log (zero). Every external call and its credit cost is saved in the `ledger_calls` table. `receipt.json` has a `cost` block: each call (adapter, status, credits, time), total credits, USD and INR, and the run limits. The HTML page does not show the cost block.
 
 **Working (tested):**
@@ -68,7 +68,7 @@ For the Speed Post bill sample, see [dataset provenance](data/SOURCES.md). Price
 
 **Not done (stated honestly):**
 
-- The payment file uses a generic CSV layout. Each bank (for example ICICI, HDFC) has its own bulk-upload format; the layout is set per client at onboarding.
+- The payment file uses a generic CSV layout. It does not match any specific bank's bulk-upload format.
 - Kavach cannot see whether the controller uploaded the file. The bank statement is the only proof of payment.
 - MCA registry integration needs a data.gov.in key; the Swiggy payee cites the MCA record (CIN) held in client records. That record has no link and no record date in the output.
 
@@ -91,18 +91,11 @@ For the Speed Post bill sample, see [dataset provenance](data/SOURCES.md). Price
 
 | Next build | Why not now |
 | --- | --- |
-| MCA company registry integration for Indian legal payees | It needs a data.gov.in API key. Signup and approval did not fit the build window. |
+| MCA company registry integration for Indian legal payees | It needs a data.gov.in API key. The team has none yet. |
 | Live reconciliation against bank feeds | It needs a bank-feed connection per client. In the event we can only reconcile against an uploaded statement. |
-| Bank-account name check (who owns the account) | RBI's beneficiary name lookup has no API for third parties. Payment-provider account validation needs a provider account. |
+| Bank-account name check (who owns the account) | It needs a payment-provider or bank account-validation service. The team has none. |
 | Shared fraud signal across clients (for example, one bank account claimed by two carriers) | It needs more than one client and a data-sharing agreement. |
 | MCP tool `authorize_payment` for AI agents | First the rules and the approval gate must be stable for human users. |
-
-## The future of this service
-
-When agents can do the whole payables job, they will also send the money. An agent that pays needs a firewall outside the model. The model can propose a payment. Rules, records and a signed approval decide whether it goes out. Kavach is that firewall.
-
-- **Autonomy slider.** The client chooses what Kavach may release alone. For example: known carrier, same beneficiary version, amount under a limit. Everything else waits for a person.
-- **Every human override becomes a test case.** When a person releases a hold or stops a ready bill, Kavach saves the case with its evidence. The rules must pass every saved case before a new rule version goes live.
 
 ## How to run it
 
@@ -133,12 +126,12 @@ Optional environment variables: `KAVACH_DB` (database file, default `./kavach.db
 
 ## How it's built
 
-Full diagram and the exactly-once procedure: [`docs/architecture.md`](docs/architecture.md).
+Full diagram and the at-most-once procedure: [`docs/architecture.md`](docs/architecture.md).
 
 - **Runs on:** one Python process. FastAPI serves the server-rendered page and the JSON endpoints. There is no background worker: sign-off writes the payment file in the same transaction. There is no separate frontend ([ADR 0002](docs/adr/0002-one-process-server-rendered-page.md)). The judges can kill and restart one process.
 - **State:** one SQLite file in WAL mode. Set the path with `KAVACH_DB`. Tables: `runs`, `rows` (with evidence and decisions), `outbox` (signed bills, bank references, file IDs, paid or returned per statement), `payment_files` (frozen file bytes, SHA-256, download count), `beneficiary_changes`, `reconciliations` and `ledger_calls` (every external call and its cost). The browser and `result.json` read the same rows.
 - **Agents and models:** no LLM in v1. The inputs are structured (CSV), so parsers extract the fields and rules decide. A model would only be added to read unstructured invoices or emails, and it would never decide or send anything.
-- **Tools and data:** source adapters with timeouts, retries and cost reservation call Crustdata, the Razorpay IFSC API (public, no key) and the vendor's legal page. Rules have a version (`kavach/config.toml`, `rule_version`), and every run saves the version it used.
+- **Tools and data:** source adapters with timeouts and cost reservation call Crustdata (one retry on HTTP 429), the Razorpay IFSC API (public, no key) and the vendor's legal page. Rules have a version (`kavach/config.toml`, `rule_version`), and every run saves the version it used.
 - **Where it calls Crustdata:** Pay approved bills: `company_identify` corroborates the carrier's recorded web domain; on a bank change, `company_enrich` and `web_search_live` add the company profile and recent news. Post bank lines: `company_identify` for the merchant domain, `web_enrich_live` to fetch the vendor legal page, and `web_search_live` for an unknown payee (suggestions only). Kavach compares domains by exact equality only. Kavach never uses a name-only match.
 - **Logs:** the server log is the uvicorn access log (method, path, status). It holds no account numbers or emails. Every external call is in the `ledger_calls` table and in `receipt.json`.
 
@@ -146,7 +139,7 @@ Full diagram and the exactly-once procedure: [`docs/architecture.md`](docs/archi
 
 | Source | What it proves | What it cannot prove | Cost per call |
 | --- | --- | --- | --- |
-| Client records (approved beneficiary versions, payment history, trusted contacts, ledger rules, onboarding records) | The approved destination, past payments, who to call back, which ledger account | That a new bank account is genuine | Rs 0 |
+| Client records (approved beneficiary versions, payment history, trusted contacts, descriptor rules, ledger rules) | The approved destination, past payments, who to call back, which ledger account | That a new bank account is genuine | Rs 0 |
 | Razorpay IFSC API (`https://ifsc.razorpay.com/<IFSC>`, no key) | The IFSC code exists and names a bank branch | Who owns the account | Rs 0 |
 | Crustdata `company_identify` | A company directory entry agrees with the carrier's or merchant's recorded domain | That the sender is who they claim; a lookalike domain only triggers review | 0.2 credit per match ($0.06) |
 | Crustdata `company_enrich` and `web_search_live` | Company profile and recent public pages for a carrier with a bank change; search results for an unknown payee | Who owns a bank account; search results never name a payee | 2 credits; 1 credit per page |
@@ -154,9 +147,9 @@ Full diagram and the exactly-once procedure: [`docs/architecture.md`](docs/archi
 | MCA company master data, data.gov.in (planned) | The registered `CompanyName` of an Indian company | That the company was the payee of this charge | Free with key (not integrated) |
 | Bank statement (uploaded CSV) | A debit with the bill's bank reference, amount and currency left the account; a credit with it came back | That the account belongs to the carrier | Rs 0 |
 
-Crustdata pricing on our pay-as-you-go account: 1 credit = $0.30 (dashboard). Other costs measured during exploration: `company_enrich` 2 credits, `web_search_live` 1 credit, `web_enrich_live` 1 credit.
+The receipt converts credits at the rate in `kavach/config.toml` (1 credit = $0.30). Costs seen in live runs: `company_identify` 0.2 per match, `company_enrich` 2, `web_search_live` 1, `web_enrich_live` 1.
 
-**Where a person approves:** the controller signs the exact batch (bills, amounts, destinations, beneficiary versions). The AP lead records the callback. A separate authorizer approves a beneficiary change. An edit after sign-off voids the approval for that item only.
+**Where a person approves:** the controller signs the exact batch (bills, amounts, destinations, beneficiary versions). The AP lead records the callback. A separate authorizer approves a beneficiary change. A change after sign-off never alters the signed file; the page warns that the file must not be uploaded as it is.
 
 **Cost ledger:** Kavach saves each adapter call and its cost in SQLite. `GET /runs/{run_id}/receipt.json` shows the `cost` block. The run page shows payment outcomes and source evidence, not internal expenses.
 
@@ -166,15 +159,13 @@ Crustdata pricing on our pay-as-you-go account: 1 credit = $0.30 (dashboard). Ot
 
 - **Outbound sales (AI SDR).** The market is crowded and the ethics are weak (cold outreach to real people).
 - **Backhaul freight brokerage.** Crustdata cannot find cargo or truck capacity.
-- **Credit desk (carrier and customer credit checks).** In our checks, headcount stayed flat before insolvency, so the data gave no early warning.
-- **The payment run.** The job has a clear buyer, a clear fee and a clear pass mark ("each invoice paid exactly once").
+- **The payment run.** The job has a clear buyer and a clear pass mark ("each invoice paid exactly once").
 
 **What we learned while building:**
 
 | Tried | Result | What we do now |
 | --- | --- | --- |
 | Crustdata name-only company matching | Wrong company in 2 of 6 tests | Anchor on domains, never on names ([ADR 0003](docs/adr/0003-legal-payee-sources.md)) |
-| Fuzzy domain matching | `asia.com` matched unrelated firms at confidence 1.0 | Exact domain equality only; one or two edits → review |
 | RazorpayX payouts | The team has no RazorpayX account | Kavach writes a bank payment file and reconciles from the statement ([ADR 0004](docs/adr/0004-bank-payment-file.md)) |
 | Next.js frontend plus API | Two services to kill, restart and keep in sync | One server-rendered FastAPI process ([ADR 0002](docs/adr/0002-one-process-server-rendered-page.md)) |
 
