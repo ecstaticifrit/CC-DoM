@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** claimed by tatvadesai (Devin)
 
 - [ ] One FastAPI process serves the run page with server-rendered HTML, CSS, and minimal JavaScript. Before submission, it shows both jobs, the selected mode, the budget, and the sandbox label.
 - [ ] A valid upload creates a stable run URL backed by SQLite. An unsupported row stays visible with its missing fact; review neither posts it nor pays it.
