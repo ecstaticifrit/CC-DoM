@@ -1,12 +1,12 @@
 # Public facts and test instructions
 
-## Post bank lines: actual disclosed payments
+## Archived bookkeeping fixture (not a payment-run upload)
 
 `samples/public_spending_gbp.csv` contains two rows from the UK Department for Work and Pensions, [spending over GBP 25,000, November 2025 (original CSV)](https://assets.publishing.service.gov.uk/media/6984b79f2df808759a7bd74f/transparency-for-publication-november-2025.csv). Contains public sector information licensed under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
 
 To reproduce: filter `Payment Number` to `1042136210` and `1042143649` and `Supplier Name` to `AMAZON WEB SERVICES EMEA SARL`. Both invoice account descriptions end in `HOSTING`. Map invoice paid date to ISO date, supplier name to description, payment number to reference, and remove the pound sign and grouping commas from the invoice amount. Preserve GBP; there is no INR conversion. The two amounts sum to GBP 9,664,474.08.
 
-This is a public spending disclosure adapted to the statement importer, not a bank statement. The references are DWP payment numbers, not UTRs. Upload only in **Post bank lines**. The demo rule assigns `cloud hosting`; the UK department is not a Kavach client.
+This is a public spending disclosure used in earlier bookkeeping experiments, not a bank statement. The references are DWP payment numbers, not UTRs. Do not upload it as carrier bills or as reconciliation evidence.
 
 ## Pay approved bills: real prices, fictional transactions
 

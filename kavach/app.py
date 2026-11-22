@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from kavach import payrules, postings
+from kavach import payrules
 from kavach.config import load_config
 from kavach.intake import IntakeError, parse
 from kavach.records import load_records
@@ -46,7 +46,7 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
 
     @app.get("/samples/{filename}")
     def sample_file(filename: str):
-        allowed = {"friday_bills.csv", "brief_bank_lines.csv", "public_spending_gbp.csv", "public_tariff_bills.csv"}
+        allowed = {"friday_bills.csv", "public_tariff_bills.csv"}
         if filename not in allowed:
             raise HTTPException(404, "Sample not found")
         path = HERE.parent / "data" / "samples" / filename
@@ -55,7 +55,9 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
         return FileResponse(path, media_type="text/csv", filename=filename)
 
     @app.post("/runs")
-    async def create_run(request: Request, mode: str = Form(""), run_credits: str = Form(""), file: UploadFile | None = None):
+    async def create_run(request: Request, mode: str = Form("pay_bills"), run_credits: str = Form(""), file: UploadFile | None = None):
+        if mode != "pay_bills":
+            return templates.TemplateResponse(request, "start.html", ctx(error="Start with approved carrier bills."), status_code=400)
         live_config = load_config()
         data = await file.read() if file else b""
         try:
@@ -63,27 +65,20 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
         except IntakeError as err:
             return templates.TemplateResponse(request, "start.html", ctx(error=str(err)), status_code=400)
         input_hash = hashlib.sha256(data).hexdigest()
-        if mode == "post_lines":
-            existing = store.find_run_by_hash("post_lines", input_hash)
-            if existing:
-                return RedirectResponse(f"/runs/{existing}", status_code=303)
         try:
             cap = float(run_credits) if run_credits.strip() else float(live_config["limits"]["run_credits"])
         except ValueError:
             cap = float(live_config["limits"]["run_credits"])
         budgeted = BudgetedSources(sources, max_credits=max(0.0, cap), max_seconds=float(live_config["limits"]["run_seconds"]))
         records = load_records()
-        if mode == "pay_bills":
-            rows = payrules.evaluate_bills(rows, records, budgeted, today or date.today())
-            for row in rows:
-                earlier = store.payout_for_bill(row["item_ref"]) if row["outcome"] != "cannot_verify" else None
-                if earlier:
-                    row["outcome"] = "already_signed"
-                    row["decision"] = {"reason": f"Bill {row['item_ref']} was already signed in {earlier['run_id']} "
-                                                 f"(reference {earlier['reference_id'][:8]}…). Kavach will not pay it twice.",
-                                       "owner": "Controller", "next_step": "Open the earlier run to follow that payout."}
-        else:
-            rows = postings.evaluate_lines(rows, records, budgeted.fetch_page_text)
+        rows = payrules.evaluate_bills(rows, records, budgeted, today or date.today())
+        for row in rows:
+            earlier = store.payout_for_bill(row["item_ref"]) if row["outcome"] != "cannot_verify" else None
+            if earlier:
+                row["outcome"] = "already_signed"
+                row["decision"] = {"reason": f"Bill {row['item_ref']} was already signed in {earlier['run_id']} "
+                                             f"(reference {earlier['reference_id'][:8]}…). Kavach will not pay it twice.",
+                                   "owner": "Controller", "next_step": "Open the earlier run to follow that payout."}
         run_id = store.create_run(mode, live_config["rule_version"], rows, input_hash=input_hash, allowance_credits=cap)
         return RedirectResponse(f"/runs/{run_id}", status_code=303)
 

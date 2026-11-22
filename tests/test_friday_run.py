@@ -61,16 +61,9 @@ def test_restart_keeps_the_same_transfer_ids_and_balances(db_path):
     assert "27,050.00" in restarted.get("/").text
 
 
-def test_brief_bank_lines_post_twice_hold_one_and_leave_sharma_unposted(client):
-    run_url = upload(client, "post_lines", (SAMPLES / "brief_bank_lines.csv").read_text()).headers["location"]
-    rows = client.get(f"{run_url}/result.json").json()["rows"]
-    got = [(r["outcome"], (r["posting"] or {}).get("legal_payee"), (r["posting"] or {}).get("ledger_account")) for r in rows]
-    assert got == [
-        ("posted", "Swiggy Limited", "staff meals"),
-        ("posted", "Amazon Web Services EMEA SARL", "cloud hosting"),
-        ("hold_possible_duplicate", None, None),
-        ("cannot_verify", None, None),
-    ]
+def test_bank_statement_cannot_start_a_payment_run(client):
+    response = upload(client, "post_lines", (SAMPLES / "brief_bank_lines.csv").read_text())
+    assert response.status_code == 400
     assert "100,000.00" in client.get("/").text
 
 

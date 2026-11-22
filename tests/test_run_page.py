@@ -1,12 +1,12 @@
-def test_start_page_offers_both_jobs_with_budget_and_sandbox_label(client):
-    page = client.get("/").text
-    assert "Pay approved bills" in page
-    assert "Post bank lines" in page
-    assert "Run allowance" in page
-    assert "Sandbox" in page
-
 from conftest import bills_csv, upload
 
+
+def test_start_page_has_one_bill_upload_with_budget_and_sandbox_label(client):
+    page = client.get("/").text
+    assert "Upload approved carrier bills" in page
+    assert 'name="mode"' not in page and "Post bank lines" not in page
+    assert "Run allowance" in page
+    assert "Sandbox" in page
 
 def test_valid_upload_creates_a_stable_run_url_listing_every_bill(client):
     response = upload(client, "pay_bills", bills_csv(

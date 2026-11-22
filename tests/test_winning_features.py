@@ -18,18 +18,9 @@ def test_bank_change_with_mismatched_domain_corroborates_with_crustdata(client):
     assert receipt["cost"]["crustdata_credits"] == 0.2
 
 
-def test_reuploading_renamed_bank_statement_replays_saved_run_and_posting_ids(client):
-    text = (SAMPLES / "brief_bank_lines.csv").read_text()
-    first = upload(client, "post_lines", text, filename="october.csv").headers["location"]
-    second = upload(client, "post_lines", text, filename="october-copy.csv").headers["location"]
-    assert second == first
-
-    rows = client.get(f"{first}/result.json").json()["rows"]
-    posting_ids = [r["posting"]["posting_id"] for r in rows if r["posting"]]
-    assert len(posting_ids) == 2
-    assert len(set(posting_ids)) == 2
-    assert all(pid.startswith("post_") for pid in posting_ids)
-    assert client.get(f"{first}/receipt.json").json()["simulated_transfers"] == []
+def test_start_page_does_not_offer_expense_samples(client):
+    assert client.get("/samples/brief_bank_lines.csv").status_code == 404
+    assert client.get("/samples/public_spending_gbp.csv").status_code == 404
 
 
 def test_lower_credit_allowance_blocks_new_paid_calls_while_independent_bills_finish(client):

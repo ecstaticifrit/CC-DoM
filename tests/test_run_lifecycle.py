@@ -39,20 +39,16 @@ def test_after_a_restart_the_same_run_and_rows_come_back_without_resubmitting(db
 
 
 def test_organizer_result_agrees_with_the_page(client):
-    run_url = upload(client, "post_lines",
-        "date,description,amount,currency,reference\n"
-        "2026-10-03,RAZ*SWIGGY BLR,1240,INR,\n"
-        "2026-10-09,PAYTM*SHARMA TRD,,INR,\n",
-    ).headers["location"]
+    data = bills_csv("C-801,CAR-1,Blue Dart,,INR,123456781234,HDFC0000053,")
+    run_url = client.post("/runs", files={"file": ("bills.csv", data, "text/csv")}).headers["location"]
     result = client.get(f"{run_url}/result.json").json()
     page = client.get(run_url).text
 
     assert result["run_id"] in page
-    assert result["mode"] == "post_lines"
+    assert result["mode"] == "pay_bills"
     outcomes = {r["item_ref"]: (r["outcome"], r["missing"]) for r in result["rows"]}
     assert outcomes == {
-        "line 1": ("posted", []),
-        "line 2": ("cannot_verify", ["amount"]),
+        "C-801": ("cannot_verify", ["amount"]),
     }
     assert "Cannot verify: missing amount" in page
 

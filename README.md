@@ -16,8 +16,7 @@ For public-source test data, see [dataset provenance and upload instructions](da
 2. Hold the bills that are not safe to pay, with the evidence, an owner and a next step.
 3. Prepare an exact clean batch for the controller to sign.
 4. Pay each signed bill exactly once, also through a crash.
-5. Record bank charges that already left the account to the correct ledger account and legal payee.
-6. Reconcile payouts against the bank statement.
+5. Review the simulated transfer receipt.
 
 **Who does it today.** In-house AP (accounts payable) staff, outsourced payables desks, and freight payment firms such as Cass Information Systems.
 
@@ -32,11 +31,10 @@ For public-source test data, see [dataset provenance and upload instructions](da
 | Job | Columns |
 | --- | --- |
 | Pay approved bills | `bill_id, carrier_id, carrier_name, amount, currency, account_number, ifsc, sender_email` (`sender_email` optional) |
-| Post bank lines | `date, description, amount, currency, reference` (`reference` optional) |
 
 **Working (tested):**
 
-- One page offers two jobs: **Pay approved bills** and **Post bank lines**. It shows the run allowance (time and credits) and the sandbox label before you start.
+- One upload starts the carrier payment run. The page shows the run allowance and the sandbox label before review.
 - You upload a CSV. A bad file gets a readable error. The error never repeats input values.
 - Each run is saved in SQLite (WAL mode) and has a stable URL (`/runs/{run_id}`). After a restart, the same URL shows the same run. You do not upload again.
 - A row with a missing required value stays visible as **Cannot verify**, and the page names the missing field.
@@ -53,7 +51,6 @@ For public-source test data, see [dataset provenance and upload instructions](da
   - Sender email domain differs from the carrier's recorded domain → **Review**, never an accusation. When `CRUSTDATA_API_KEY` is set, Crustdata `company_identify` corroborates the recorded domain.
   - The controller ticks ready bills, sees "Approve N bills for Rs X" with exact bills, destinations and beneficiary versions, and signs. The server rechecks each bill's fingerprint. Held or changed bills cannot be sent.
   - Signing debits the demo treasury and credits the approved carrier wallet. Approval, both balances and a stable `sim_` transfer ID commit together. Insufficient funds produces a failed attempt without moving money. Uploading the same bill again cannot transfer it twice.
-- *Post bank lines.* Legal payee from client records, a registry citation or the vendor's legal page (the AWS contracting-party page is fetched live and quoted). The client's ledger rule sets the account and writes one committed `posting_id`. Re-uploading the same statement (even renamed) replays the saved run by SHA-256 with zero new postings. Possible duplicates are held; unknown descriptors are **Cannot verify** with the missing fact named. Zero payout calls.
 - *Run allowance.* Each run enforces a credit cap and time cap (`kavach/config.toml` or overridden on the start page). When the allowance runs out, paid calls stop and dependent facts become **Cannot verify** while independent bills finish.
 - *Run receipt* (`/runs/{id}/receipt.json` and on the page): held, signed, submitted, processed and posted counts; every external call with its status and credits, converted to dollars and rupees with the rate shown; model spend (none); the personal data used, how it is masked, the retention policy and the person-lookup count from the call log (zero).
 
@@ -175,5 +172,5 @@ Two-minute storyboard:
 3. **0:45 Sign 3.** "Approve 3 bills for Rs X". The confirmation lists the exact bills and masked destinations.
 4. **1:00 Kill.** Stop the process after signing. The page shows "Connection lost".
 5. **1:10 Restart.** Same run URL, three stable simulator IDs and unchanged wallet balances. Neither hold was paid.
-6. **1:30 Posting example.** Post the October lines: Swiggy Limited → staff meals, AWS EMEA SARL → cloud hosting, one duplicate held, Sharma **Cannot verify**, zero payout calls.
+6. **1:30 Transfers.** Inspect each signed bill's simulated wallet movement.
 7. **1:50 Receipt.** Cost ledger (each call and its cost) and the personal-data block (masked fields, retention policy).
