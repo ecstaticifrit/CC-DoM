@@ -34,3 +34,10 @@ button { font:inherit; padding:.5rem 1rem; border:1px solid var(--ink); backgrou
   .panel { display:none; }
   .evidence:not([hidden]) { display:table-row; background:#f4f5f2; }
 }
+.sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+.signbar { position:sticky; bottom:0; display:flex; gap:1rem; align-items:center; justify-content:flex-end; background:#fff; border-top:1px solid var(--line); padding:.6rem 0; margin:0; }
+.status-ready, .status-posted, .status-signed { color:var(--ok); font-weight:600; }
+.status-hold_bank_change, .status-hold_already_paid, .status-hold_possible_duplicate, .status-hold_invalid_routing, .status-review_sender_domain { color:var(--attn); font-weight:600; }
+.receipt { margin-top:2rem; }
+.receipt h2 { font-size:1.15rem; }
+small { color:var(--muted); font-weight:400; }

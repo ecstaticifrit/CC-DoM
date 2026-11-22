@@ -4,3 +4,11 @@ sandbox_label = "Sandbox: RazorpayX test mode. No real money moves."
 [limits]
 run_seconds = 600
 run_credits = 150
+
+[costs]
+usd_per_credit = 0.30
+inr_per_usd = 96.72
+rate_date = "third-party quote, Oct 2026; update on the day"
+
+[privacy]
+retention_days = 30

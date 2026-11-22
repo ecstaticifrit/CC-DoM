@@ -21,6 +21,20 @@
     row.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(row); } });
   });
 
+  const selected = document.querySelector(".selected");
+  function updateSelection() {
+    if (!selected) return;
+    let n = 0, total = 0;
+    document.querySelectorAll('input[name="row"]:checked').forEach(box => {
+      n += 1; total += parseFloat(box.closest("tr").dataset.amount || "0");
+    });
+    selected.textContent = `${n} bill${n === 1 ? "" : "s"} selected · Rs ${total.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+  }
+  document.querySelectorAll('input[name="row"]').forEach(box => {
+    box.addEventListener("click", e => e.stopPropagation());
+    box.addEventListener("change", updateSelection);
+  });
+
   async function poll() {
     try {
       const res = await fetch(`/runs/${runId}/status.json`, { cache: "no-store" });

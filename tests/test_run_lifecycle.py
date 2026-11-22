@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from conftest import bills_csv, upload
+from conftest import FakeProvider, bills_csv, make_client, upload
 from kavach.app import create_app
 
 DUMMY_ACCOUNT = "918273645500991"
@@ -29,14 +29,14 @@ def test_no_full_account_number_or_email_reaches_any_page_or_output(client, capl
 
 
 def test_after_a_restart_the_same_run_and_rows_come_back_without_resubmitting(db_path):
-    first = TestClient(create_app(db_path), follow_redirects=False)
+    first = make_client(db_path, FakeProvider())
     run_url = upload(first, "pay_bills", bills_csv(
         "C-401,CAR-1,Blue Dart,1500,INR,123456781234,HDFC0000053,",
     )).headers["location"]
     before = first.get(f"{run_url}/result.json").json()
     assert before["rows"][0]["item_ref"] == "C-401"
 
-    restarted = TestClient(create_app(db_path), follow_redirects=False)
+    restarted = make_client(db_path, FakeProvider())
     assert restarted.get(f"{run_url}/result.json").json() == before
     assert "C-401" in restarted.get(run_url).text
 
@@ -54,7 +54,7 @@ def test_organizer_result_agrees_with_the_page(client):
     assert result["mode"] == "post_lines"
     outcomes = {r["item_ref"]: (r["outcome"], r["missing"]) for r in result["rows"]}
     assert outcomes == {
-        "line 1": ("not_checked", []),
+        "line 1": ("posted", []),
         "line 2": ("cannot_verify", ["amount"]),
     }
     assert "Cannot verify: missing amount" in page

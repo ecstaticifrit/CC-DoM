@@ -15,6 +15,10 @@ class FakeSources:
             return {"status": "invalid", "call": call, "retrieved_at": "t"}
         return {"status": "ok", "bank": "Bank", "branch": "Branch", "call": call, "retrieved_at": "t"}
 
+    def fetch_page_text(self, url):
+        return ("Account Country | AWS Contracting Party ... Amazon Web Services EMEA SARL | 352 2789 0057 | "
+                "38 Avenue John F. Kennedy, L-1855, Luxembourg", "2026-11-22T10:00:00+00:00")
+
     def company_domain(self, domain):
         return {"call": {"adapter": "crustdata.company_identify", "endpoint": "x", "cost_credits": 0.2, "status": "ok"},
                 "primary_domain": domain, "retrieved_at": "t", "source_ref": "Crustdata"}
