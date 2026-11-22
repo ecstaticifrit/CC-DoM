@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Start a payment run</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form class="start" method="post" action="/runs" enctype="multipart/form-data">
+  <fieldset>
+    <legend>Job</legend>
+    {% for value, label in modes.items() %}
+    <label class="mode"><input type="radio" name="mode" value="{{ value }}" {% if loop.first %}checked{% endif %}> {{ label }}</label>
+    {% endfor %}
+  </fieldset>
+  <dl class="facts">
+    <dt>Run allowance</dt>
+    <dd>{{ config.limits.run_seconds // 60 }} minutes, {{ config.limits.run_credits }} credits</dd>
+    <dt>Mode</dt>
+    <dd>Sandbox</dd>
+  </dl>
+  <label class="file">CSV file <input type="file" name="file" accept=".csv,text/csv" required></label>
+  <button type="submit">Start run</button>
+</form>
+{% endblock %}

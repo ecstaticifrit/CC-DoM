@@ -1,0 +1,6 @@
+rule_version = "2026-11-22.1"
+sandbox_label = "Sandbox: RazorpayX test mode. No real money moves."
+
+[limits]
+run_seconds = 600
+run_credits = 150

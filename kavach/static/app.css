@@ -1,0 +1,36 @@
+:root { --ink:#1b1f24; --muted:#5b6470; --line:#d9dee4; --bg:#fbfbf9; --attn:#8a3b00; --ok:#1d5a34; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.45; }
+.top { display:flex; gap:1rem; align-items:baseline; justify-content:space-between; padding:.75rem 1.25rem; border-bottom:1px solid var(--line); background:#fff; }
+.brand { font-weight:700; color:var(--ink); text-decoration:none; }
+.sandbox { font-size:.85rem; color:var(--muted); }
+main { max-width: 72rem; margin: 0 auto; padding: 1.25rem; }
+h1 { font-size:1.4rem; margin:.25rem 0 1rem; }
+.facts { display:grid; grid-template-columns:max-content 1fr; gap:.25rem 1rem; margin:0 0 1rem; }
+.facts dt { color:var(--muted); }
+.facts dd { margin:0; }
+.error { border-left:4px solid var(--attn); background:#fff4ec; padding:.6rem .8rem; }
+.start fieldset { border:1px solid var(--line); padding:.75rem 1rem; margin:0 0 1rem; }
+.mode { display:block; padding:.2rem 0; }
+.file { display:block; margin:0 0 1rem; }
+button { font:inherit; padding:.5rem 1rem; border:1px solid var(--ink); background:var(--ink); color:#fff; cursor:pointer; }
+.conn { border-left:4px solid var(--attn); background:#fff4ec; padding:.5rem .8rem; }
+.workspace { display:grid; grid-template-columns:minmax(0, 2fr) minmax(16rem, 1fr); gap:1.25rem; align-items:start; }
+.ledger { width:100%; border-collapse:collapse; background:#fff; }
+.ledger th, .ledger td { text-align:left; padding:.5rem .6rem; border-bottom:1px solid var(--line); vertical-align:top; }
+.ledger thead th { font-size:.8rem; color:var(--muted); font-weight:600; }
+.ledger .num { text-align:right; font-variant-numeric: tabular-nums; white-space:nowrap; }
+.row { cursor:pointer; }
+.row:focus, .row[aria-selected="true"] { outline:2px solid var(--ink); outline-offset:-2px; }
+.status-cannot_verify { color:var(--attn); font-weight:600; }
+.status-not_checked { color:var(--muted); }
+.panel { position:sticky; top:1rem; background:#fff; border:1px solid var(--line); padding:.75rem 1rem; }
+.panel dl, .evidence dl { display:grid; grid-template-columns:max-content 1fr; gap:.2rem .8rem; margin:0; }
+.panel dt, .evidence dt { color:var(--muted); }
+.panel dd, .evidence dd { margin:0; overflow-wrap:anywhere; }
+@media (min-width: 52rem) { .evidence { display:none; } }
+@media (max-width: 52rem) {
+  .workspace { grid-template-columns:1fr; }
+  .panel { display:none; }
+  .evidence:not([hidden]) { display:table-row; background:#f4f5f2; }
+}
