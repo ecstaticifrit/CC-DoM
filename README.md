@@ -42,16 +42,25 @@ Track: Buying and paying. Only test money moves (RazorpayX test mode). Shared wo
 - The organizer output is at `GET /runs/{run_id}/result.json`. It reads the same saved run as the page.
 - The page polls `GET /runs/{run_id}/status.json`. If the server stops, the page shows "Connection lost" with the last update time. It reconnects to the same run.
 
-**In progress at freeze (the design; the team confirms before freeze):**
+**Working (tested, with live IFSC and live AWS page calls):**
 
-- *Pay approved bills.* Kavach checks each bill against client records:
-  - Bank account differs from the approved beneficiary version → hold.
-  - Already paid, or a possible duplicate → hold.
-  - IFSC code not found by a live lookup → hold ("invalid code").
-  - Sender email domain differs from the carrier's recorded domain → review, never an accusation. Crustdata corroborates the recorded domain.
-  - The controller signs an exact batch. The server rechecks every item before it acts. Kavach saves each payout in an outbox before it calls RazorpayX. A background worker sends the test payouts. Recovery after a crash never uses a fresh retry key (see [ADR 0001](docs/adr/0001-payout-recovery-never-replaces.md)).
-- *Post bank lines.* Kavach finds the legal payee from client records, a registry record or the vendor's legal page. It applies the client's ledger rule. It holds possible duplicates. It marks unknown descriptors **Cannot verify**. This job makes zero payout calls.
-- *Run receipt.* What finished, what waits, a cost ledger (each external call and its cost) and a personal-data block.
+- *Pay approved bills.* Kavach checks each bill against client records (`data/carriers.json`):
+  - Bank account differs from the approved beneficiary version, or is a retired account → **Held: bank account changed**, with both masked endings, the trusted contact's role and record ID, and the next step.
+  - Bill already paid → hold. Same carrier, amount and currency as a recent payment or an earlier row → **possible duplicate**, not proven.
+  - IFSC checked live at `ifsc.razorpay.com`; a 404 → **Held: invalid IFSC**. A branch never counts as proof of account ownership.
+  - Sender email domain differs from the carrier's recorded domain → **Review**, never an accusation. When `CRUSTDATA_API_KEY` is set, Crustdata `company_identify` corroborates the recorded domain.
+  - The controller ticks ready bills, sees "Approve N bills for Rs X" with exact bills, destinations and beneficiary versions, and signs. The server rechecks each bill's fingerprint. Held or changed bills cannot be sent.
+  - The approved intent, retry key and a 32-character reference are saved in SQLite before any RazorpayX call. A worker thread sends test payouts. After a crash it retries only with the same key and body, then looks the payout up by reference; more than one match → `pending_review` ([ADR 0001](docs/adr/0001-payout-recovery-never-replaces.md)). Uploading the same bills again shows **Already signed earlier** and pays nothing twice.
+- *Post bank lines.* Legal payee from client records, a registry citation or the vendor's legal page (the AWS contracting-party page is fetched live and quoted). The client's ledger rule sets the account. Possible duplicates are held; unknown descriptors are **Cannot verify** with the missing fact named. Zero payout calls.
+- *Run receipt* (`/runs/{id}/receipt.json` and on the page): held, signed, submitted, processed and posted counts; every external call with its status and credits, converted to dollars and rupees with the rate shown; model spend (none); the personal data used, how it is masked, the retention policy and the person-lookup count from the call log (zero).
+
+**Not done at freeze (stated honestly):**
+
+- Live RazorpayX payouts need the team's test keys in `.env`. Without them, signed bills show "Payout not sent: RazorpayX test keys are missing". The exactly-once logic is tested against a fake provider that mimics Razorpay's idempotency.
+- Reconciliation against a bank statement and the T+3 reversal reopen are not built. The worker refreshes provider status (processed, reversed) but the page does not reopen reversed items yet.
+- The run allowance is shown but not yet enforced as a hard stop.
+- The two-person beneficiary change (callback + separate authorizer) is described in the next step text but has no screen yet.
+- MCA registry integration needs a data.gov.in key; the Swiggy payee cites the MCA record from client records.
 
 **Finished result.** A run receipt and `result.json` with, for each row: the outcome (ready, held, cannot verify, submitted, processed, posted), the evidence, the owner and next step for each exception, and provider or posting IDs.
 
@@ -116,11 +125,11 @@ Optional environment variables: `KAVACH_DB` (database file, default `./kavach.db
 
 Full diagram and the exactly-once procedure: [`docs/architecture.md`](docs/architecture.md).
 
-- **Runs on:** one Python process. FastAPI serves the server-rendered page and the JSON endpoints. A background worker thread in the same process sends payouts (in progress at freeze). There is no separate frontend ([ADR 0002](docs/adr/0002-one-process-server-rendered-page.md)). The judges can kill and restart one process.
-- **State:** one SQLite file in WAL mode. Set the path with `KAVACH_DB`. Working today: the `runs` and `rows` tables. In progress at freeze: approvals, the payout outbox and the call ledger in the same file. The browser and `result.json` read the same rows.
+- **Runs on:** one Python process. FastAPI serves the server-rendered page and the JSON endpoints. A background worker thread in the same process sends payouts. There is no separate frontend ([ADR 0002](docs/adr/0002-one-process-server-rendered-page.md)). The judges can kill and restart one process.
+- **State:** one SQLite file in WAL mode. Set the path with `KAVACH_DB`. Tables: `runs`, `rows` (with evidence and decisions), `outbox` (approved payouts, retry keys, references, provider IDs) and `ledger_calls` (every external call and its cost). The browser and `result.json` read the same rows.
 - **Agents and models:** no LLM in v1. The inputs are structured (CSV), so parsers extract the fields and rules decide. A model would only be added to read unstructured invoices or emails, and it would never decide or send anything.
-- **Tools and data (in progress at freeze):** source adapters with timeouts, retries and cost reservation call Crustdata, the Razorpay IFSC API, the vendor's legal page and RazorpayX. Rules have a version (`kavach/config.toml`, `rule_version`), and every run saves the version it used.
-- **Where it calls Crustdata (in progress at freeze):** `company_identify` in the Pay approved bills job. It corroborates the carrier's recorded web domain. Kavach compares domains by exact equality only. Kavach never uses a name-only match.
+- **Tools and data:** source adapters with timeouts, retries and cost reservation call Crustdata, the Razorpay IFSC API, the vendor's legal page and RazorpayX. Rules have a version (`kavach/config.toml`, `rule_version`), and every run saves the version it used.
+- **Where it calls Crustdata:** `company_identify` in the Pay approved bills job. It corroborates the carrier's recorded web domain. Kavach compares domains by exact equality only. Kavach never uses a name-only match.
 
 ## Its sources and checks
 
@@ -137,7 +146,7 @@ Crustdata pricing on our pay-as-you-go account: 1 credit = $0.30 (dashboard). Ot
 
 **Where a person approves:** the controller signs the exact batch (bills, amounts, destinations, beneficiary versions). The AP lead records the callback. A separate authorizer approves a beneficiary change. An edit after sign-off voids the approval for that item only.
 
-**Cost ledger on the receipt (in progress at freeze):** Kavach reserves the cost before each external call. It saves every call, including retries, with the source, the time and the actual cost. The receipt shows the total in credits, dollars and rupees, with the conversion rate used, and stops calls at the run allowance (`kavach/config.toml`: 600 seconds, 150 credits).
+**Cost ledger on the receipt:** Kavach saves every external call with the source, the status, the time and the credits it cost. The receipt shows the total in credits, dollars and rupees with the conversion rate used. The run allowance (`kavach/config.toml`: 600 seconds, 150 credits) is shown; enforcing it as a hard stop is not built yet.
 
 ## The approaches you tried
 

@@ -1,6 +1,6 @@
 # Kavach architecture
 
-Words follow [`GLOSSARY.md`](../GLOSSARY.md). Status: the page, upload, saved runs, masking, `result.json` and `status.json` work today. The checks, sign-off, outbox, worker, cost ledger and receipt are the design and are **in progress at freeze**. Dashed boxes are planned.
+Words follow [`GLOSSARY.md`](../GLOSSARY.md). Status at freeze: the page, upload, saved runs, masking, checks, sign-off, outbox, worker, cost ledger and receipt work and are tested (payouts against a fake provider until test keys are added). Dashed boxes are planned.
 
 ```mermaid
 flowchart TD
@@ -85,4 +85,4 @@ The adapters write each external call to `ledger_calls`: source, time, credits r
 ## Kill and restart behaviour
 
 - Working today: after a restart, the same run URL shows the same saved rows. The page shows "Connection lost" with the last update time while the server is down, then reconnects without resubmitting.
-- Design (in progress at freeze): on start, the worker reads every outbox row that is not final and applies steps 6 to 9. A kill before step 3 leaves no outbox row, so nothing is sent. A kill after the provider accepts is resolved by the same key or the `reference_id` lookup. The rehearsal pass mark is the same three provider payout IDs before and after the restart.
+- On start, the worker reads every outbox row that is not final and applies steps 6 to 9. A kill before step 3 leaves no outbox row, so nothing is sent. A kill after the provider accepts is resolved by the same key or the `reference_id` lookup. The rehearsal pass mark is the same three provider payout IDs before and after the restart.
