@@ -133,3 +133,22 @@ def test_value_block_shows_outcomes_and_cost(client):
     assert "src-crustdata" in page and "RazorpayX" not in page
     v = client.get(f"{run_url}/receipt.json").json()["this_run"]
     assert (v["ready"], v["bank_changes"], v["duplicates"]) == (3, 1, 1)
+
+
+def test_bank_change_dialog_returns_to_the_run_page_with_feedback(client):
+    run_url = upload(client, "pay_bills", NEW_ACCOUNT).headers["location"]
+    page = client.get(run_url).text
+    assert 'id="change-1"' in page and "Step 1. Call the carrier" in page
+    r = client.post(f"{run_url}/rows/1/callback", data={"callback_by": "Asha", "outcome": "confirmed", "via": "dialog"})
+    assert r.headers["location"] == f"{run_url}?done=callback#change-1"
+    assert "Callback saved" in client.get(f"{run_url}?done=callback").text
+    r = client.post(f"{run_url}/rows/1/authorize", data={"authorized_by": "asha", "via": "dialog"})
+    assert r.headers["location"] == f"{run_url}?change_error=same_person#change-1"
+    r = client.post(f"{run_url}/rows/1/authorize", data={"authorized_by": "Ravi", "via": "dialog"})
+    assert r.headers["location"] == f"{run_url}?done=approved#why-1"
+    assert rows(client, run_url)["C-601"]["outcome"] == "ready"
+
+
+def test_signing_shows_a_toast_with_the_count(client):
+    run_url = signed_friday_run(client)
+    assert "3 bills signed" in client.get(f"{run_url}?done=signed&n=3").text

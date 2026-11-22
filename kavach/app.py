@@ -204,6 +204,25 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
             },
         }
 
+    def _bank_change_context(run: dict) -> dict[int, dict]:
+        """Masked facts the bank-change dialog needs for each held bank-change bill."""
+        if run["mode"] != "pay_bills":
+            return {}
+        carriers = current_records().get("carriers", {})
+        out = {}
+        for r in run["rows"]:
+            change = run["changes"].get(r["row_number"])
+            if r["outcome"] != "hold_bank_change" and not change:
+                continue
+            raw = store.raw_row(run["run_id"], r["row_number"])["raw"]
+            carrier = carriers.get(raw.get("carrier_id"), {})
+            active = next((b for b in carrier.get("beneficiaries", []) if b["status"] == "active"), None)
+            out[r["row_number"]] = {"contact": carrier.get("trusted_contact"), "carrier": carrier.get("name") or r["display"].get("carrier"),
+                                    "approved": mask_account(active["account_number"]) if active else "none",
+                                    "approved_version": active["version"] if active else None,
+                                    "requested": mask_account(raw.get("account_number", "")), "change": change}
+        return out
+
     @app.get("/runs/{run_id}", response_class=HTMLResponse)
     def run_page(request: Request, run_id: str):
         run = _run_or_404(run_id)
@@ -215,6 +234,9 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
         return templates.TemplateResponse(request, "run.html", ctx(
             run=run, rows=rows, mode_label=MODES[run["mode"]], receipt=_receipt(run),
             fps=_fingerprints(run) if run["mode"] == "pay_bills" else {},
+            contacts=_bank_change_context(run),
+            done=request.query_params.get("done", ""), done_n=request.query_params.get("n", ""),
+            change_error=request.query_params.get("change_error", ""),
             hold_groups=[{"outcome": k, "label": LABELS.get(k, k), "refs": v} for k, v in groups.items()],
             stale={f["file_id"]: stale_bills(f["file_id"]) for f in run["files"]},
             recon_error=request.query_params.get("recon_error", "")[:160]))
@@ -236,8 +258,8 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
         run = _run_or_404(run_id)
         form = await request.form()
         items = [(int(v.split(":")[0]), v.split(":")[1]) for v in form.getlist("item")]
-        _, file_id = store.approve(run_id, items, _fingerprints(run), signer="controller")
-        return RedirectResponse(f"/runs/{run_id}" + ("#payment-file" if file_id else ""), status_code=303)
+        queued, file_id = store.approve(run_id, items, _fingerprints(run), signer="controller")
+        return RedirectResponse(f"/runs/{run_id}?done=signed&n={len(queued)}" + ("#payment-file" if file_id else ""), status_code=303)
 
     @app.get("/runs/{run_id}/files/{file_id}.csv")
     def payment_file(run_id: str, file_id: str):
@@ -255,6 +277,15 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
         carrier = current_records().get("carriers", {}).get(raw.get("carrier_id"), {})
         return row, raw, carrier
 
+    def _change_back(run_id: str, row_number: int, via: str):
+        """Where a bank-change form returns: the dialog on the run page, or the full change page."""
+        def to(error: str, done: str = "") -> str:
+            if via == "dialog":
+                query = f"?change_error={error}" if error else (f"?done={done}" if done else "")
+                return f"/runs/{run_id}{query}#change-{row_number}"
+            return f"/runs/{run_id}/rows/{row_number}/change" + (f"?error={error}" if error else "")
+        return to
+
     @app.get("/runs/{run_id}/rows/{row_number}/change", response_class=HTMLResponse)
     def change_page(request: Request, run_id: str, row_number: int, error: str = ""):
         run = _run_or_404(run_id)
@@ -266,15 +297,15 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
             approved_version=active["version"] if active else None, requested=mask_account(raw["account_number"])))
 
     @app.post("/runs/{run_id}/rows/{row_number}/callback")
-    def record_callback(run_id: str, row_number: int, callback_by: str = Form(""), outcome: str = Form("")):
+    def record_callback(run_id: str, row_number: int, callback_by: str = Form(""), outcome: str = Form(""), via: str = Form("")):
         run = _run_or_404(run_id)
         row, raw, carrier = _bank_change_row(run, row_number)
-        back = f"/runs/{run_id}/rows/{row_number}/change"
+        back = _change_back(run_id, row_number, via)
         contact = carrier.get("trusted_contact")
         if row["outcome"] != "hold_bank_change" or not contact:
-            return RedirectResponse(back + "?error=no_contact" if not contact else back, status_code=303)
+            return RedirectResponse(back("no_contact" if not contact else ""), status_code=303)
         if not callback_by.strip() or outcome not in ("confirmed", "denied"):
-            return RedirectResponse(back + "?error=callback_fields", status_code=303)
+            return RedirectResponse(back("callback_fields"), status_code=303)
         store.record_callback(run_id, row_number, raw["carrier_id"], raw["account_number"], raw["ifsc"],
                               contact["record_id"], callback_by.strip(), outcome == "confirmed")
         decision = ({"reason": f"{row['decision'].get('reason', '')} Callback through {contact['record_id']} confirmed the change "
@@ -285,24 +316,24 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
                                "Treat the request as a possible fraud attempt.",
                      "owner": "Controller", "next_step": "Do not pay to the requested account. Pay only to the approved beneficiary."})
         store.set_row(run_id, row_number, decision=decision)
-        return RedirectResponse(back, status_code=303)
+        return RedirectResponse(back("", done="callback"), status_code=303)
 
     @app.post("/runs/{run_id}/rows/{row_number}/authorize")
-    def authorize_change(run_id: str, row_number: int, authorized_by: str = Form("")):
+    def authorize_change(run_id: str, row_number: int, authorized_by: str = Form(""), via: str = Form("")):
         run = _run_or_404(run_id)
         _bank_change_row(run, row_number)
-        back = f"/runs/{run_id}/rows/{row_number}/change"
+        back = _change_back(run_id, row_number, via)
         change = run["changes"].get(row_number)
         who = authorized_by.strip()
         if not change or change["status"] != "callback_confirmed":
-            return RedirectResponse(back + "?error=no_callback", status_code=303)
+            return RedirectResponse(back("no_callback"), status_code=303)
         if not who:
-            return RedirectResponse(back + "?error=authorizer_name", status_code=303)
+            return RedirectResponse(back("authorizer_name"), status_code=303)
         if who.casefold() == (change["callback_by"] or "").casefold():
-            return RedirectResponse(back + "?error=same_person", status_code=303)
+            return RedirectResponse(back("same_person"), status_code=303)
         if store.authorize_change(run_id, row_number, who):
             reevaluate_row(_run_or_404(run_id), row_number)
-        return RedirectResponse(f"/runs/{run_id}", status_code=303)
+        return RedirectResponse(f"/runs/{run_id}?done=approved#why-{row_number}" if via == "dialog" else f"/runs/{run_id}", status_code=303)
 
     @app.post("/runs/{run_id}/reconcile")
     async def reconcile_upload(request: Request, run_id: str, file: UploadFile | None = None):

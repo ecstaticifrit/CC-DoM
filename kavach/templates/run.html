@@ -7,6 +7,8 @@
 {% set allowance = receipt.allowance if has_receipt else config.limits %}
 {% set fps = fps|default({}) %}
 {% set hold_groups = hold_groups|default([]) %}
+{% set contacts = contacts|default({}) %}
+{% set done = done|default("") %}
 {% set result_words = {"pass": "Passed", "fail": "Failed", "warn": "Check this", "info": "Note", "unknown": "Not checked"} %}
 
 {% macro result_icon(result) -%}
@@ -109,6 +111,25 @@
 {% set cd = namespace(n=0) %}{% for c in receipt.cost.calls or [] %}{% if c.adapter.startswith("crustdata") and c.status == "ok" %}{% set cd.n = cd.n + 1 %}{% endif %}{% endfor %}
 <section class="run-summary" aria-labelledby="summary-title">
   <h2 id="summary-title">What Kavach did in this run</h2>
+  {% set total_rows = rows|length %}
+  {% set n_ok = rows|selectattr("outcome", "in", ["ready", "posted"])|list|length %}
+  {% set n_signed = rows|selectattr("outcome", "equalto", "signed")|list|length %}
+  {% set n_dup = rows|selectattr("outcome", "equalto", "already_signed")|list|length %}
+  {% set n_held = total_rows - n_ok - n_signed - n_dup %}
+  {% if total_rows %}
+  <div class="statusbar" role="img" aria-label="{{ n_signed }} signed, {{ n_ok }} clean, {{ n_held }} held, {{ n_dup }} already signed, of {{ total_rows }}">
+    {% if n_signed %}<span class="seg seg-signed" style="flex-grow: {{ n_signed }}"></span>{% endif %}
+    {% if n_ok %}<span class="seg seg-ok" style="flex-grow: {{ n_ok }}"></span>{% endif %}
+    {% if n_held %}<span class="seg seg-held" style="flex-grow: {{ n_held }}"></span>{% endif %}
+    {% if n_dup %}<span class="seg seg-dup" style="flex-grow: {{ n_dup }}"></span>{% endif %}
+  </div>
+  <ul class="statuskey">
+    {% if n_signed %}<li><span class="dot seg-signed"></span>{{ n_signed }} signed</li>{% endif %}
+    {% if n_ok %}<li><span class="dot seg-ok"></span>{{ n_ok }} {{ "clean" if run.mode == "pay_bills" else "posted" }}</li>{% endif %}
+    {% if n_held %}<li><span class="dot seg-held"></span>{{ n_held }} {{ "held" if run.mode == "pay_bills" else "not posted" }}</li>{% endif %}
+    {% if n_dup %}<li><span class="dot seg-dup"></span>{{ n_dup }} already signed earlier</li>{% endif %}
+  </ul>
+  {% endif %}
   {% if run.mode == "pay_bills" %}
   <ul class="summary-lines">
     <li>{{ result_icon("info") }}<span>Kavach checked <strong>{{ v.rows }} bills</strong> in {{ v.check_time }} against your client records and live sources{% if cd.n %}, including {{ cd.n }} Crustdata lookup{{ "s" if cd.n != 1 }}{% endif %}.</span></li>
@@ -185,7 +206,7 @@
       {% set ev = row.evidence|default([]) %}
       {% set n_pass = ev|selectattr("result", "equalto", "pass")|list|length %}
       {% set n_flag = ev|selectattr("result", "in", ["fail", "warn"])|list|length %}
-      <tr class="row" tabindex="0" data-row="{{ row.row_number }}" data-amount="{{ row.display.amount|replace(',', '') }}">
+      <tr class="row{% if row.outcome.startswith(('hold_', 'review_', 'cannot_verify', 'reopened_')) %} row-held{% endif %}" tabindex="0" data-row="{{ row.row_number }}" data-amount="{{ row.display.amount|replace(',', '') }}">
         {% if can_select %}<td>{% if row.outcome == "ready" and fps.get(row.row_number) %}<input type="checkbox" name="row" value="{{ row.row_number }}" aria-label="Select {{ row.item_ref }}"
             data-item="{{ row.row_number }}:{{ fps[row.row_number] }}" data-ref="{{ row.item_ref }}" data-carrier="{{ row.display.carrier }}"
             data-dest="{{ row.display.destination }}" data-ifsc="{{ row.display.ifsc }}" data-version="{{ row.display.beneficiary_version }}"
@@ -214,7 +235,7 @@
           {% if row.payout %}<span class="subline">File <code>{{ row.payout.file_id }}</code> · ref <code>{{ row.payout.reference_id }}</code> · {% if row.payout.status == "paid" %}<strong>Paid</strong>: statement line {{ row.payout.reconciled.line }}{% elif row.payout.status == "returned" %}<strong>Returned by the bank</strong>{% else %}Waiting for the bank statement{% endif %}</span>{% endif %}
         </td>
         <td class="num">{{ row.display.amount }} {{ row.display.currency }}</td>
-        <td class="why-cell"><button type="button" class="btn btn-ghost btn-sm" data-open-row="{{ row.row_number }}">Why?<span class="sr"> Show the checks for {{ row.item_ref }}</span></button></td>
+        <td class="why-cell"><button type="button" class="btn btn-ghost btn-sm" data-open-row="{{ row.row_number }}">Why?<span class="sr"> Show the checks for {{ row.item_ref }}</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3.5l4.5 4.5L6 12.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -311,13 +332,103 @@
       {% if decision.next_step %}<div class="next-step"><dt>Next step</dt><dd>{{ decision.next_step }}</dd></div>{% endif %}
     </dl>
     <div class="dlg-actions">
-      {% if has_receipt and row.outcome == "hold_bank_change" %}<a class="btn" href="/runs/{{ run.run_id }}/rows/{{ row.row_number }}/change">Record callback and approval</a>{% endif %}
+      <span class="pager">
+        <button type="button" class="btn btn-secondary btn-icon" data-step="-1" aria-label="Previous item" title="Previous (←)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button type="button" class="btn btn-secondary btn-icon" data-step="1" aria-label="Next item" title="Next (→)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3.5l4.5 4.5L6 12.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </span>
+      {% if has_receipt and row.row_number in contacts and row.outcome == "hold_bank_change" %}<a class="btn" href="/runs/{{ run.run_id }}/rows/{{ row.row_number }}/change" data-open-change="{{ row.row_number }}">Record callback and approval</a>{% endif %}
       <button type="button" class="btn btn-secondary" data-close>Close</button>
     </div>
   </footer>
 </template>
 {% endfor %}
 
+
+{% set change_errors = {
+  "no_contact": "This carrier has no trusted contact on record. Add one to client records before anyone can confirm this change.",
+  "callback_fields": "Enter your name and choose what the contact said.",
+  "no_callback": "Record a confirmed callback first. Then a second person can approve.",
+  "authorizer_name": "Enter the name of the person who approves.",
+  "same_person": "A different person must approve. The AP lead who made the callback cannot also approve the change.",
+} %}
+{% for n, c in contacts.items() %}
+{% set row = rows|selectattr("row_number", "equalto", n)|first %}
+{% set ch = c.change %}
+{% set step = 3 if ch and ch.status == "authorized" else (2 if ch and ch.status == "callback_confirmed" else 1) %}
+<template id="change-{{ n }}">
+  <header class="dlg-head">
+    <div>
+      <p class="dlg-ref">{{ row.item_ref }} · {{ c.carrier }}</p>
+      <h2 class="dlg-title" id="change-title">Confirm the new bank account</h2>
+    </div>
+    <p class="dlg-amount">Rs {{ row.display.amount }}<span>{{ row.display.currency }}</span></p>
+  </header>
+  <div class="dlg-scroll">
+    <ol class="stepper" aria-label="Bank change steps">
+      <li class="{% if step > 1 %}is-done{% elif step == 1 %}is-current{% endif %}{% if ch and ch.status == 'callback_denied' %} is-stopped{% endif %}"><span class="stepper-dot">1</span><span>AP lead calls the carrier</span></li>
+      <li class="{% if step > 2 %}is-done{% elif step == 2 %}is-current{% endif %}"><span class="stepper-dot">2</span><span>A second person approves</span></li>
+      <li class="{% if step == 3 %}is-done{% endif %}"><span class="stepper-dot">3</span><span>Kavach checks the bill again</span></li>
+    </ol>
+
+    <div class="change-error" data-change-error hidden role="alert"></div>
+
+    <table class="compare">
+      <tbody>
+        <tr><th scope="row">Approved account</th><td class="mono">{{ c.approved }}{% if c.approved_version %} <span class="muted">(version {{ c.approved_version }})</span>{% endif %}</td></tr>
+        <tr class="is-diff"><th scope="row">This bill asks for</th><td class="mono">{{ c.requested }} · {{ row.display.ifsc }}</td></tr>
+        <tr><th scope="row">Trusted contact</th><td>{% if c.contact %}{{ c.contact.role }}, client record {{ c.contact.record_id }} (added {{ c.contact.enrolled_at }}){% else %}None on record{% endif %}</td></tr>
+      </tbody>
+    </table>
+
+    {% if ch and ch.status == "callback_denied" %}
+      <div class="verdict status-hold_bank_change"><p><strong>{{ ch.callback_by }}</strong> called {{ ch.contact_record_id }}. The contact did not confirm the new account. Treat the request as a possible fraud attempt. The bill stays held.</p></div>
+    {% endif %}
+
+    {% if step == 1 and c.contact %}
+    <form class="step-form" method="post" action="/runs/{{ run.run_id }}/rows/{{ n }}/callback">
+      <input type="hidden" name="via" value="dialog">
+      <h3 class="dlg-h">Step 1. Call the carrier</h3>
+      <p class="hint">Call the number in client record {{ c.contact.record_id }}. Do not use a phone number or email from the invoice: a fraudster controls those.</p>
+      <label class="field">Your name (AP lead)<input type="text" name="callback_by" required autocomplete="name" placeholder="Asha Rao"></label>
+      <fieldset class="choice">
+        <legend>What did the contact say?</legend>
+        <label class="choice-opt"><input type="radio" name="outcome" value="confirmed" required><span><strong>They confirmed the new account</strong><span>The bill moves to step 2.</span></span></label>
+        <label class="choice-opt is-danger"><input type="radio" name="outcome" value="denied"><span><strong>They did not confirm it</strong><span>The bill stays held as a possible fraud.</span></span></label>
+      </fieldset>
+      <div class="dlg-actions"><button class="btn" type="submit">Save the callback result</button></div>
+    </form>
+    {% elif step == 1 %}
+    <div class="verdict status-cannot_verify"><p>This carrier has no trusted contact on record. Add one to client records before anyone can confirm this change.</p></div>
+    {% elif step == 2 %}
+    <div class="verdict status-ready"><p><strong>{{ ch.callback_by }}</strong> called {{ ch.contact_record_id }} at {{ ch.callback_at }}. The contact confirmed the new account.</p></div>
+    <form class="step-form" method="post" action="/runs/{{ run.run_id }}/rows/{{ n }}/authorize">
+      <input type="hidden" name="via" value="dialog">
+      <h3 class="dlg-h">Step 2. Approve the new account</h3>
+      <p class="hint">You approve the account ending {{ c.requested }} for {{ c.carrier }}. The old account stops being used. Kavach then checks the bill again. The controller still signs it before payment.</p>
+      <label class="field">Your name (not {{ ch.callback_by }})<input type="text" name="authorized_by" required autocomplete="name" placeholder="Ravi Menon"></label>
+      <div class="dlg-actions"><button class="btn" type="submit">Approve the new account</button></div>
+    </form>
+    {% else %}
+    <div class="verdict status-ready"><p><strong>{{ ch.authorized_by }}</strong> approved the new account at {{ ch.authorized_at }}. Kavach checked the bill again. Its status is now <strong>{{ labels.get(row.outcome, row.outcome) }}</strong>.</p></div>
+    {% endif %}
+    <p class="subline">People type their names here. There are no logins yet. A production version needs user accounts so that the system enforces the two-person rule.</p>
+  </div>
+  <footer class="dlg-foot">
+    <div class="dlg-actions">
+      <button type="button" class="btn btn-secondary" data-open-row="{{ n }}">Back to the checks</button>
+      <button type="button" class="btn btn-secondary" data-close>Close</button>
+    </div>
+  </footer>
+</template>
+{% endfor %}
+
+{% set toasts = {
+  "signed": (done_n|default("") ~ " " ~ ("bill" if done_n|default("") == "1" else "bills") ~ " signed. Your bank payment file is ready below."),
+  "callback": "Callback saved. A second person must now approve the new account.",
+  "approved": "New account approved. Kavach checked the bill again.",
+} %}
+<div class="toast-region" aria-live="polite">{% if done in toasts %}<div class="toast" role="status">{{ result_icon("pass") }}<span>{{ toasts[done] }}</span><button type="button" class="toast-x" aria-label="Dismiss message" data-toast-close><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" stroke-linecap="round"/></svg></button></div>{% endif %}</div>
+<div class="change-errors" hidden data-change-error-text="{{ change_errors.get(change_error|default(''), '') }}"></div>
 <dialog class="dlg" id="why-dialog" aria-labelledby="why-title"><div class="dlg-inner"></div></dialog>
 
 {% if can_select %}
@@ -364,7 +475,7 @@
           <th scope="row"><code>{{ f.file_id }}</code><span class="subline">signed by {{ f.signed_by }} · {{ f.created_at }}</span></th>
           <td>{{ f.bills }}</td>
           <td class="num">Rs {{ f.total }}</td>
-          <td><code title="{{ f.sha256 }}">{{ f.sha256[:16] }}…</code></td>
+          <td><span class="copyable"><code title="{{ f.sha256 }}">{{ f.sha256[:16] }}…</code><button type="button" class="btn-copy" data-copy="{{ f.sha256 }}" aria-label="Copy the SHA-256 fingerprint"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3H4a1.5 1.5 0 0 0-1.5 1.5V11"/></svg></button></span></td>
           <td>{{ f.downloads }}</td>
           <td><a class="btn btn-sm" href="/runs/{{ run.run_id }}/files/{{ f.file_id }}.csv" download>Download CSV</a></td>
         </tr>

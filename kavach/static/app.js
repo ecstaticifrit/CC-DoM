@@ -46,20 +46,62 @@
     });
   });
 
-  // Decision card for one row.
+  // Decision card and bank-change card share one dialog; the content comes from a <template>.
   const why = document.getElementById("why-dialog");
-  function openRow(rowNumber, opener) {
-    const tpl = document.getElementById(`why-${rowNumber}`);
+  const order = Array.from(document.querySelectorAll(".row")).map(r => r.dataset.row);
+  let current = null;
+  function openCard(kind, rowNumber, opener) {
+    const tpl = document.getElementById(`${kind}-${rowNumber}`);
     if (!tpl || !why) return;
     const inner = why.querySelector(".dlg-inner");
     inner.replaceChildren(tpl.content.cloneNode(true));
-    document.querySelectorAll(".row").forEach(r => r.setAttribute("aria-selected", String(r.dataset.row === String(rowNumber))));
-    why.returnFocus = opener || null;
-    why.showModal();
-    const first = inner.querySelector(".dlg-actions .btn");
-    if (first) first.focus();
+    why.setAttribute("aria-labelledby", kind === "change" ? "change-title" : "why-title");
+    current = String(rowNumber);
+    document.querySelectorAll(".row").forEach(r => r.setAttribute("aria-selected", String(r.dataset.row === current)));
+    const errorBox = inner.querySelector("[data-change-error]");
+    const errorText = document.querySelector("[data-change-error-text]");
+    if (errorBox && errorText && errorText.dataset.changeErrorText && location.hash === `#change-${rowNumber}`) {
+      errorBox.textContent = errorText.dataset.changeErrorText;
+      errorBox.hidden = false;
+      errorText.dataset.changeErrorText = "";
+    }
+    if (opener !== undefined) why.returnFocus = opener;
+    if (!why.open) why.showModal();
+    history.replaceState(null, "", `#${kind}-${rowNumber}`);
+    const focusable = inner.querySelector("input[type='text'], .dlg-actions .btn:not([data-step])");
+    if (focusable) focusable.focus();
+  }
+  const openRow = (n, opener) => openCard("why", n, opener);
+  if (why) {
+    why.addEventListener("click", e => {
+      const step = e.target.closest("[data-step]");
+      const change = e.target.closest("[data-open-change]");
+      const back = e.target.closest("[data-open-row]");
+      if (step && current) {
+        const i = order.indexOf(current);
+        const next = order[(i + Number(step.dataset.step) + order.length) % order.length];
+        openRow(next);
+      } else if (change) {
+        e.preventDefault();
+        openCard("change", change.dataset.openChange);
+      } else if (back) {
+        openRow(back.dataset.openRow);
+      }
+    });
+    why.addEventListener("keydown", e => {
+      if (e.target.closest("input, textarea, select")) return;
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        const btn = why.querySelector(`[data-step="${e.key === "ArrowRight" ? 1 : -1}"]`);
+        if (btn) { e.preventDefault(); btn.click(); }
+      }
+    });
+    why.addEventListener("close", () => {
+      current = null;
+      history.replaceState(null, "", location.pathname + location.search);
+    });
   }
   document.querySelectorAll("[data-open-row]").forEach(btn => {
+    if (btn.closest("template")) return;
     btn.addEventListener("click", e => { e.stopPropagation(); openRow(btn.dataset.openRow, btn); });
   });
   document.querySelectorAll(".row").forEach(row => {
@@ -73,8 +115,31 @@
     });
   });
 
-  const linked = location.hash.match(/^#why-(\d+)$/);
-  if (linked) openRow(linked[1], null);
+  const linked = location.hash.match(/^#(why|change)-(\d+)$/);
+  if (linked) openCard(linked[1], linked[2], null);
+
+  // Toast: dismiss on click, fade out after a few seconds.
+  const toast = document.querySelector(".toast");
+  if (toast) {
+    const hide = () => { toast.classList.add("is-leaving"); setTimeout(() => toast.remove(), 200); };
+    toast.querySelector("[data-toast-close]").addEventListener("click", hide);
+    setTimeout(hide, 6000);
+    const url = new URL(location.href);
+    ["done", "n", "change_error"].forEach(k => url.searchParams.delete(k));
+    history.replaceState(null, "", url.pathname + url.search + location.hash);
+  }
+
+  // Copy buttons.
+  document.querySelectorAll("[data-copy]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copy);
+        btn.classList.add("is-copied");
+        btn.setAttribute("aria-label", "Copied");
+        setTimeout(() => { btn.classList.remove("is-copied"); btn.setAttribute("aria-label", "Copy the SHA-256 fingerprint"); }, 1600);
+      } catch { /* clipboard blocked: the full value stays in the title attribute */ }
+    });
+  });
 
   // Batch selection and the sign-off dialog.
   const form = document.querySelector("[data-sign-form]");
