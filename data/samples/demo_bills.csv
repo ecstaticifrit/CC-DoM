@@ -1,0 +1,9 @@
+bill_id,carrier_id,carrier_name,amount,currency,account_number,ifsc,sender_email
+D-201,CAR-2,VRL Logistics Limited,18400.00,INR,00431100022227777,SBIN0000691,finance@vrlgroup.in
+D-202,CAR-3,Shree Ganesh Roadlines,9200.00,INR,917020045673333,UTIB0000004,
+D-203,CAR-4,Navata Road Transport,15750.00,INR,123400006789001,ICIC0000001,accounts@navata.com
+D-204,CAR-1,Blue Dart Express Limited,48000.00,INR,778899009876,HDFC0000053,ar@bluedart-payments.com
+D-205,CAR-2,VRL Logistics Limited,12500.00,INR,00431100022227777,SBIN0000691,finance@vrlgroup.in
+D-206,CAR-1,Blue Dart Express Limited,31250.00,INR,502000112341234,HDFC0000053,ar@bluedrat.com
+D-207,CAR-4,Navata Road Transport,6400.00,INR,,ICIC0000001,accounts@navata.com
+D-208,CAR-9,Sharma Roadlines,4000.00,INR,918273645500991,HDFC0000053,

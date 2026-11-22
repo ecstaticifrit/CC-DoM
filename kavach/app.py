@@ -27,8 +27,8 @@ LABELS = {
     "signed": "Signed: in payment file", "posted": "Posted", "reopened_reversed": "Reopened: payment returned",
 }
 ATTENTION = ("hold_", "review_", "cannot_verify", "reopened_reversed")
-ATTENTION_ORDER = ["reopened_reversed", "cannot_verify", "hold_bank_change", "hold_already_paid", "hold_possible_duplicate",
-                   "hold_invalid_routing", "review_sender_domain", "already_signed", "not_checked", "ready", "signed", "posted"]
+ATTENTION_ORDER = ["reopened_reversed", "hold_bank_change", "hold_possible_duplicate", "hold_already_paid", "hold_invalid_routing",
+                   "review_sender_domain", "cannot_verify", "already_signed", "not_checked", "ready", "signed", "posted"]
 
 
 def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAPI:
@@ -64,7 +64,7 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
 
     @app.get("/samples/{filename}")
     def sample_file(filename: str):
-        allowed = {"friday_bills.csv", "friday_bank_statement.csv", "public_tariff_bills.csv"}
+        allowed = {"demo_bills.csv", "demo_bank_statement.csv", "friday_bills.csv", "friday_bank_statement.csv", "public_tariff_bills.csv"}
         if filename not in allowed:
             raise HTTPException(404, "Sample not found")
         path = HERE.parent / "data" / "samples" / filename
@@ -173,7 +173,7 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
                 "shown_as": "Account numbers show only the last 4 digits. Email addresses show only the domain. Raw input stays on the server.",
                 "payment_file": ("The bank payment file holds full account numbers, because the bank needs them. "
                                  "Only the signed bills are in it. Each download is counted: "
-                                 + (", ".join(f"{f['file_id']} downloaded {f['downloads']} time(s)" for f in run["files"]) or "no file yet") + ".")
+                                 + (", ".join(f"{f['file_id']} " + ("not downloaded yet" if not f["downloads"] else "downloaded once" if f["downloads"] == 1 else f"downloaded {f['downloads']} times") for f in run["files"]) or "no file yet") + ".")
                                 if run["mode"] == "pay_bills" else None,
                 "retention": f"{config['privacy']['retention_days']} days (policy; no deletion has been performed yet)",
                 "person_lookups": sum(1 for c in run["calls"] if c["adapter"].startswith("person")),

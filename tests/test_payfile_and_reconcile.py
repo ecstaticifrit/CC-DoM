@@ -68,7 +68,7 @@ def test_payment_file_has_full_accounts_but_no_other_output_does(client):
         text = client.get(url).text
         assert "502000112341234" not in text and "917020045673333" not in text
     receipt = client.get(f"{run_url}/receipt.json").json()
-    assert "downloaded 1 time" in receipt["personal_data"]["payment_file"]
+    assert "downloaded once" in receipt["personal_data"]["payment_file"]
 
 
 NEW_ACCOUNT = bills_csv("C-601,CAR-2,VRL Logistics Limited,7000.00,INR,55551111222233,SBIN0000691,finance@vrlgroup.in")
@@ -152,3 +152,14 @@ def test_bank_change_dialog_returns_to_the_run_page_with_feedback(client):
 def test_signing_shows_a_toast_with_the_count(client):
     run_url = signed_friday_run(client)
     assert "3 bills signed" in client.get(f"{run_url}?done=signed&n=3").text
+
+
+def test_one_demo_file_shows_every_outcome_and_reconciles(client):
+    run_url = upload(client, "pay_bills", (SAMPLES / "demo_bills.csv").read_text()).headers["location"]
+    outcomes = {r["item_ref"]: r["outcome"] for r in client.get(f"{run_url}/result.json").json()["rows"]}
+    assert outcomes == {"D-201": "ready", "D-202": "ready", "D-203": "ready", "D-204": "hold_bank_change",
+                        "D-205": "hold_possible_duplicate", "D-206": "review_sender_domain",
+                        "D-207": "cannot_verify", "D-208": "cannot_verify"}
+    sign_all_ready(client, run_url)
+    client.post(f"{run_url}/reconcile", files={"file": ("s.csv", (SAMPLES / "demo_bank_statement.csv").read_bytes(), "text/csv")})
+    assert client.get(f"{run_url}/receipt.json").json()["paid"] == 3

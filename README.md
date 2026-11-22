@@ -53,7 +53,7 @@ For the Speed Post bill sample, see [dataset provenance](data/SOURCES.md). Price
   - The controller ticks ready bills, sees "Approve N bills for Rs X" with exact bills, destinations and beneficiary versions, and signs. The server rechecks each bill's fingerprint. Held or changed bills cannot be sent.
   - Sign-off and the **bank payment file** are written in one SQLite transaction ([ADR 0004](docs/adr/0004-bank-payment-file.md)). Each bill gets one bank reference (`KV` + bill ID) and is in exactly one line of one file, ever. The file is frozen: every download returns the same bytes and SHA-256, also after a restart. Downloads are counted. Uploading the same bills again shows **Already signed earlier** and creates no new line.
 - Each run enforces internal credit and time limits. When a required check cannot finish, independent bills can still proceed.
-- *Run receipt* (`/runs/{id}/receipt.json` and on the page): held, signed, submitted, processed and posted counts; every external call with its status and credits, converted to dollars and rupees with the rate shown; model spend (none); the personal data used, how it is masked, the retention policy and the person-lookup count from the call log (zero).
+- *Run receipt* (`/runs/{id}/receipt.json` and on the page): held, signed, paid per bank, waiting and returned counts; the personal data used, how it is masked, the retention policy, payment-file downloads and the person-lookup count from the call log (zero). Every external call and its credit cost is saved in the `ledger_calls` table; the demo screens do not show metering.
 
 **Working (tested):**
 
@@ -61,7 +61,7 @@ For the Speed Post bill sample, see [dataset provenance](data/SOURCES.md). Price
 - *Returned payment.* A credit line with the bill's bank reference reopens the bill as **Reopened: payment returned**, with an owner and next step.
 - *Two-person bank change.* On a **Held: bank account changed** bill, **Record callback and authorization** opens a screen. The AP lead records the callback through the trusted contact. A different person authorizes the new beneficiary version. The bill is then checked again against every rule, including bills already signed. A denied callback keeps the bill held as a possible fraud attempt. Names are typed; there are no user logins yet.
 - *Change after sign-off.* The file never changes after sign-off. If a carrier's beneficiary changes later, the file shows **Do not upload this file as it is** and names the bill.
-- *Value block.* The run page starts with "What Kavach did in this run": bills checked and how long it took, clean bills ready, money held (not counted as savings), exceptions with an owner, bills paid twice (including double debits found on the statement), and the run's cost against the fee.
+- *Value block.* The run page starts with "What Kavach did in this run": bills checked and how long it took, clean bills ready, money held (not counted as savings), exceptions with an owner, and bills paid twice (including double debits found on the statement).
 
 **Not done (stated honestly):**
 
@@ -178,10 +178,20 @@ Link: <add before submission>
 
 Two-minute storyboard:
 
-1. **0:00 Request in.** Upload the five logistics demo bills.
-2. **0:20 Holds explained.** Open the changed-account hold: old and new account endings, evidence, owner (AP lead), next step, client cutoff. Open the possible-duplicate hold.
-3. **0:45 Sign 3.** "Approve 3 bills for Rs X". The confirmation lists the exact bills and masked destinations.
-4. **1:00 Kill.** Stop the process after sign-off. The page shows "Connection lost".
-5. **1:10 Restart.** Same run URL. The same payment file, same SHA-256, 3 lines. No fourth line. No line for either hold. Upload the test statement: 3 paid.
-6. **1:30 Reconciliation.** Inspect a signed bill and the bank reference that ties it to one debit. Signing alone does not mean paid.
-7. **1:50 Receipt.** Show what cleared, what remains held, and the masking and retention disclosures.
+Use one file: `data/samples/demo_bills.csv` (also linked on the start page). Do one warm-up run first, and wait a minute between runs (Crustdata rate limit).
+
+| Bill | What it shows | Outcome |
+| --- | --- | --- |
+| D-201, D-202, D-203 | Clean bills; D-202 is a small owner with no company record | Ready to sign |
+| D-204 | Bank account changed, sender `bluedart-payments.com` (no company owns it) | Held: bank account changed, with Crustdata profile and news |
+| D-205 | Same carrier and amount as a recent payment | Held: possible duplicate |
+| D-206 | Approved account, but sender `bluedrat.com` (one-letter swap) | Review: sender domain |
+| D-207 | Account number missing | Cannot verify: missing account_number |
+| D-208 | Carrier not in client records | Cannot verify |
+
+1. **0:00 Upload.** Upload `demo_bills.csv`. Read the summary: 3 clean, 5 need attention.
+2. **0:20 Why.** Open D-204: the HELD stamp, approved vs requested account, and the Crustdata checks. Use the arrow keys to step to D-206 and D-207.
+3. **0:50 Two people.** On D-204, select **Record callback and approval** to show the two-step check. (You can stop at step 1.)
+4. **1:05 Sign.** Tick D-201 to D-203, select **Review and sign**, then press and hold. The SIGNED stamp lands on the payment file.
+5. **1:25 Kill and restart.** Stop the server, start it again, refresh. Same run, same file, same SHA-256, 3 lines.
+6. **1:45 Receipt.** Show the personal-data block: masked accounts, zero person lookups, download count.
