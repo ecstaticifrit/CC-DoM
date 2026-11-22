@@ -4,7 +4,7 @@
 
 Track: Buying and paying. Only test money moves (RazorpayX test mode). Shared words are in [`GLOSSARY.md`](GLOSSARY.md). Decisions are in [`docs/adr/`](docs/adr/).
 
-**Status labels in this file.** "Working" means the team tested it. "In progress at freeze" means the team is building it now and confirms it before code freeze. Kavach does not claim an in-progress item works until a test or the live sandbox demo shows it.
+**Status labels in this file.** "Working" means the team tested it. "Not done at freeze" lists what is missing. Kavach does not claim anything works until a test or the live demo shows it.
 
 ## The service
 
