@@ -8,16 +8,15 @@ Track: Buying and paying. Kavach never moves money: it writes a bank payment fil
 
 ## The service
 
-For public-source test data, see [dataset provenance and upload instructions](data/SOURCES.md). The DWP sample contains actual published GBP payments; the Speed Post sample uses published INR tariffs with fictional payment instructions.
+For the Speed Post bill sample, see [dataset provenance](data/SOURCES.md). Prices are public; payment instructions are fictional.
 
 **The job.** Kavach does the outsourced payables desk's work between bill approval and statement reconciliation. The client is a mid-size Indian logistics (3PL) company. Each week it must pay many carriers. The work is:
 
 1. Compare approved bills with the approved bank destinations and the payment history.
 2. Hold the bills that are not safe to pay, with the evidence, an owner and a next step.
 3. Prepare an exact clean batch for the controller to sign.
-4. Pay each signed bill exactly once, also through a crash.
-5. Record bank charges that already left the account to the correct ledger account and legal payee.
-6. Reconcile the paid bills against the bank statement.
+4. Generate a frozen bank payment file without adding a second instruction for the same bill.
+5. Reconcile the signed bills against the bank statement.
 
 **Who does it today.** In-house AP (accounts payable) staff, outsourced payables desks, and freight payment firms such as Cass Information Systems.
 
@@ -27,16 +26,16 @@ For public-source test data, see [dataset provenance and upload instructions](da
 
 ## What it does now
 
-**Input.** One CSV file per run. The kickoff format can replace these columns.
+**Input.** Start with a bill CSV. The statement belongs to that same run after sign-off.
 
 | Job | Columns |
 | --- | --- |
 | Pay approved bills | `bill_id, carrier_id, carrier_name, amount, currency, account_number, ifsc, sender_email` (`sender_email` optional) |
-| Post bank lines | `date, description, amount, currency, reference` (`reference` optional) |
+| Reconcile a signed run | `date, description, amount, currency, reference, type` (`type` defaults to debit; use credit for a return) |
 
 **Working (tested):**
 
-- One page offers two jobs: **Pay approved bills** and **Post bank lines**. It shows the run allowance (time and credits) and the sandbox label before you start.
+- The start page accepts approved carrier bills and shows the run allowance and sandbox label before review.
 - You upload a CSV. A bad file gets a readable error. The error never repeats input values.
 - Each run is saved in SQLite (WAL mode) and has a stable URL (`/runs/{run_id}`). After a restart, the same URL shows the same run. You do not upload again.
 - A row with a missing required value stays visible as **Cannot verify**, and the page names the missing field.
@@ -53,7 +52,6 @@ For public-source test data, see [dataset provenance and upload instructions](da
   - Sender email domain differs from the carrier's recorded domain → **Review**, never an accusation. When `CRUSTDATA_API_KEY` is set, Crustdata `company_identify` corroborates the recorded domain.
   - The controller ticks ready bills, sees "Approve N bills for Rs X" with exact bills, destinations and beneficiary versions, and signs. The server rechecks each bill's fingerprint. Held or changed bills cannot be sent.
   - Sign-off and the **bank payment file** are written in one SQLite transaction ([ADR 0004](docs/adr/0004-bank-payment-file.md)). Each bill gets one bank reference (`KV` + bill ID) and is in exactly one line of one file, ever. The file is frozen: every download returns the same bytes and SHA-256, also after a restart. Downloads are counted. Uploading the same bills again shows **Already signed earlier** and creates no new line.
-- *Post bank lines.* Legal payee from client records, a registry citation or the vendor's legal page (the AWS contracting-party page is fetched live and quoted). The client's ledger rule sets the account and writes one committed `posting_id`. Re-uploading the same statement (even renamed) replays the saved run by SHA-256 with zero new postings. Possible duplicates are held; unknown descriptors are **Cannot verify** with the missing fact named. No payments.
 - *Run allowance.* Each run enforces a credit cap and time cap (`kavach/config.toml` or overridden on the start page). When the allowance runs out, paid calls stop and dependent facts become **Cannot verify** while independent bills finish.
 - *Run receipt* (`/runs/{id}/receipt.json` and on the page): held, signed, submitted, processed and posted counts; every external call with its status and credits, converted to dollars and rupees with the rate shown; model spend (none); the personal data used, how it is masked, the retention policy and the person-lookup count from the call log (zero).
 
@@ -77,7 +75,6 @@ For public-source test data, see [dataset provenance and upload instructions](da
 
 - Five bills (three clean, one possible duplicate, one changed account): three ready for sign-off, two held with reasons, no payment file before sign-off, exactly three payment-file lines with three distinct bank references after sign-off.
 - Upload the bills twice, sign, kill the process. Restart: the same file (same SHA-256), still exactly three lines, no fourth payment.
-- The four October lines: Swiggy Limited → staff meals; Amazon Web Services EMEA SARL → cloud hosting; the second AWS line held as a possible duplicate; the Sharma line **Cannot verify**; no payments.
 
 **Where it still needs a person:**
 
@@ -181,10 +178,10 @@ Link: <add before submission>
 
 Two-minute storyboard:
 
-1. **0:00 Request in.** Choose Pay approved bills, upload five bills. Show the allowance and the sandbox label.
+1. **0:00 Request in.** Upload five approved carrier bills. Show the allowance and the sandbox label.
 2. **0:20 Holds explained.** Open the changed-account hold: old and new account endings, evidence, owner (AP lead), next step, client cutoff. Open the possible-duplicate hold.
 3. **0:45 Sign 3.** "Approve 3 bills for Rs X". The confirmation lists the exact bills and masked destinations.
 4. **1:00 Kill.** Stop the process after sign-off. The page shows "Connection lost".
 5. **1:10 Restart.** Same run URL. The same payment file, same SHA-256, 3 lines. No fourth line. No line for either hold. Upload the test statement: 3 paid.
-6. **1:30 Posting example.** Post the October lines: Swiggy Limited → staff meals, AWS EMEA SARL → cloud hosting, one duplicate held, Sharma **Cannot verify**, no payments.
+6. **1:30 Reconciliation.** Inspect a signed bill and the bank reference that ties it to one debit. Signing alone does not mean paid.
 7. **1:50 Receipt.** Cost ledger (each call and its cost) and the personal-data block (masked fields, retention policy).

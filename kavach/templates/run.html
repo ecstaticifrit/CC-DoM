@@ -491,6 +491,7 @@
 
 <section class="receipt" id="reconcile">
   <h2>Check the bank statement</h2>
+  <p>Trying the five Friday sample bills? <a href="/samples/friday_bank_statement.csv" download>Download their sample bank statement</a> and check it here.</p>
   {% if recon_error %}<div class="banner banner-err" role="alert"><div>{{ recon_error }}</div></div>{% endif %}
   <p class="lead">A bill counts as <strong>paid</strong> only when one statement debit has its bank reference, amount and currency. Two debits mean the bank may have paid twice. A credit with the reference means the bank returned the payment, and the bill opens again.</p>
   <form class="receipt-block" method="post" action="/runs/{{ run.run_id }}/reconcile" enctype="multipart/form-data">

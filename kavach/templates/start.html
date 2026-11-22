@@ -3,11 +3,11 @@
 <ol class="steps" aria-label="Workflow steps">
   <li class="active"><span class="step-num">1</span>Upload</li>
   <li><span class="step-num">2</span>Review the checks</li>
-  <li><span class="step-num">3</span>Sign and pay</li>
+  <li><span class="step-num">3</span>Sign the payment file</li>
 </ol>
 
-<h1>Start a payment run</h1>
-<p class="lead">Upload approved carrier bills or a bank statement. Kavach checks each row against your client records and live sources, including the Crustdata company directory. It holds risky items, shows you why, and lets you sign only the clean ones.</p>
+<h1>Start a carrier payment run</h1>
+<p class="lead">Upload the bills due this week. Kavach holds changed accounts and possible duplicates so the other carriers can be paid on time.</p>
 
 {% if error %}
 <div class="banner banner-err" role="alert">
@@ -18,28 +18,8 @@
 
 <div class="start-grid">
   <form class="start-form" method="post" action="/runs" enctype="multipart/form-data">
-    <fieldset class="field-group">
-      <legend>1. Choose a job</legend>
-      <div class="mode-list">
-        <label class="mode-option">
-          <input type="radio" name="mode" value="pay_bills" checked>
-          <span>
-            <span class="mode-title">{{ modes.pay_bills }}</span>
-            <span class="mode-desc">Check each bill for bank account changes, duplicates, bank branch codes and unknown sender domains before you sign.</span>
-          </span>
-        </label>
-        <label class="mode-option">
-          <input type="radio" name="mode" value="post_lines">
-          <span>
-            <span class="mode-title">{{ modes.post_lines }}</span>
-            <span class="mode-desc">Find the legal payee for each charge, apply your ledger rules and hold duplicates. This job makes no payments.</span>
-          </span>
-        </label>
-      </div>
-    </fieldset>
-
     <div class="field-group">
-      <span class="field-label">2. Upload a CSV file</span>
+      <span class="field-label">Upload approved carrier bills (CSV)</span>
       <label class="dropzone">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#12355B" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
         <span class="dropzone-title">Drop a CSV file here, or select one</span>
@@ -55,25 +35,21 @@
       <span><strong>Mode:</strong> Sandbox, test data only</span>
     </div>
 
-    <button class="btn" type="submit">Check this file</button>
+    <button class="btn" type="submit">Review carrier bills</button>
   </form>
 
   <aside class="guide">
     <h2>Quick start</h2>
     <ol>
-      <li>Choose <strong>Pay approved bills</strong> or <strong>Post bank lines</strong>.</li>
-      <li>Upload a CSV file, or use a sample file below.</li>
-      <li>Select any row to see every check, its source and what it proves.</li>
-      <li>Sign the clean bills, then download the payment file and the receipt.</li>
+      <li>Upload the approved bills and review any holds.</li>
+      <li>Sign the clean bills to generate the payment file for your bank. Kavach never sends money.</li>
+      <li>After payment, return to this run with the bank statement to confirm what cleared.</li>
     </ol>
 
     <h2>Sample files</h2>
     <ul class="sample-links">
-      <li><a href="/samples/public_tariff_bills.csv" download>Speed Post tariff bills</a> (Pay approved bills): published INR prices, fictional bills and test-only accounts.</li>
-      <li><a href="/samples/public_spending_gbp.csv" download>UK public spending</a> (Post bank lines): two published DWP hosting payments in GBP, not a bank statement.</li>
       <li><a href="/samples/friday_bills.csv" download>friday_bills.csv</a> — 5 bills: 3 clean, 1 bank account change, 1 possible duplicate</li>
-      <li><a href="/samples/brief_bank_lines.csv" download>brief_bank_lines.csv</a> — 4 bank lines: Swiggy, AWS, a second AWS charge, and an unknown payee</li>
-      <li><a href="/samples/friday_bank_statement.csv" download>friday_bank_statement.csv</a> — test bank statement. Upload it on the run page after you sign the sample bills.</li>
+      <li><a href="/samples/public_tariff_bills.csv" download>Speed Post tariff bills</a> — public prices and fictional payment details</li>
     </ul>
 
     <h2>Columns the CSV needs</h2>

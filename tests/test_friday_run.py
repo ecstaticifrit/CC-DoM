@@ -67,13 +67,6 @@ def test_kill_after_sign_off_returns_the_same_file_and_references(db_path):
     assert bank_refs(restarted, run_url) == bank_refs(client, run_url)
 
 
-def test_brief_bank_lines_post_twice_hold_one_and_leave_sharma_unposted(client):
-    run_url = upload(client, "post_lines", (SAMPLES / "brief_bank_lines.csv").read_text()).headers["location"]
-    rows = client.get(f"{run_url}/result.json").json()["rows"]
-    got = [(r["outcome"], (r["posting"] or {}).get("legal_payee"), (r["posting"] or {}).get("ledger_account")) for r in rows]
-    assert got == [
-        ("posted", "Swiggy Limited", "staff meals"),
-        ("posted", "Amazon Web Services EMEA SARL", "cloud hosting"),
-        ("hold_possible_duplicate", None, None),
-        ("cannot_verify", None, None),
-    ]
+def test_bank_statement_cannot_start_a_payment_run(client):
+    response = upload(client, "post_lines", (SAMPLES / "brief_bank_lines.csv").read_text())
+    assert response.status_code == 400 and "open its signed run" in response.text

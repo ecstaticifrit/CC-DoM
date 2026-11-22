@@ -20,17 +20,10 @@ def test_bank_change_with_mismatched_domain_corroborates_with_crustdata(client):
     assert {c["adapter"] for c in crustdata} >= {"crustdata.company_identify", "crustdata.company_enrich", "crustdata.web_search_live"}
 
 
-def test_reuploading_renamed_bank_statement_replays_saved_run_and_posting_ids(client):
-    text = (SAMPLES / "brief_bank_lines.csv").read_text()
-    first = upload(client, "post_lines", text, filename="october.csv").headers["location"]
-    second = upload(client, "post_lines", text, filename="october-copy.csv").headers["location"]
-    assert second == first
-
-    rows = client.get(f"{first}/result.json").json()["rows"]
-    posting_ids = [r["posting"]["posting_id"] for r in rows if r["posting"]]
-    assert len(posting_ids) == 2
-    assert len(set(posting_ids)) == 2
-    assert all(pid.startswith("post_") for pid in posting_ids)
+def test_no_statement_upload_until_a_payment_file_has_been_signed(client):
+    run = upload(client, "pay_bills", (SAMPLES / "friday_bills.csv").read_text()).headers["location"]
+    assert 'id="reconcile"' not in client.get(run).text
+    assert client.post(f"{run}/reconcile", files={"file": ("statement.csv", b"")}).status_code == 409
 
 
 def test_lower_credit_allowance_blocks_new_paid_calls_while_independent_bills_finish(client):

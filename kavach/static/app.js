@@ -1,5 +1,5 @@
 (() => {
-  // Start page: show the chosen file and the expected columns for the chosen job.
+  // Start page: show the chosen file.
   const fileInput = document.querySelector(".dropzone input[type='file']");
   const dropzone = document.querySelector(".dropzone");
   const chosen = document.querySelector(".file-chosen");
@@ -13,16 +13,6 @@
       ["dragleave", "drop"].forEach(ev => dropzone.addEventListener(ev, () => dropzone.classList.remove("dragover")));
     }
   }
-  const colsByMode = {
-    pay_bills: "bill_id, carrier_id, carrier_name, amount, currency, account_number, ifsc, sender_email",
-    post_lines: "date, description, amount, currency, reference",
-  };
-  const colsTarget = document.querySelector("[data-expected-cols]");
-  document.querySelectorAll('input[name="mode"]').forEach(radio => {
-    radio.addEventListener("change", () => {
-      if (colsTarget && colsByMode[radio.value]) colsTarget.textContent = colsByMode[radio.value];
-    });
-  });
 
   // Run page.
   const head = document.querySelector(".run-head");
