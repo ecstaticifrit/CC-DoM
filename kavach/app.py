@@ -84,7 +84,7 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
             return templates.TemplateResponse(request, "start.html", ctx(error=str(err)), status_code=400)
         input_hash = hashlib.sha256(data).hexdigest()
         try:
-            cap = float(run_credits) if run_credits.strip() else float(live_config["limits"]["run_credits"])
+            cap = min(float(live_config["limits"]["run_credits"]), float(run_credits)) if run_credits.strip() else float(live_config["limits"]["run_credits"])
         except ValueError:
             cap = float(live_config["limits"]["run_credits"])
         budgeted = BudgetedSources(sources, max_credits=max(0.0, cap), max_seconds=float(live_config["limits"]["run_seconds"]))
@@ -142,18 +142,10 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
         paid = [r for r in signed if r["payout"]["status"] == "paid"]
         returned = [r for r in signed if r["payout"]["status"] == "returned"]
         refs = [r["payout"]["reference_id"] for r in signed]
-        credits = sum(c["cost_credits"] for c in run["calls"])
-        inr = round(credits * config["costs"]["usd_per_credit"] * config["costs"]["inr_per_usd"], 2)
-        offer = config.get("offer", {"fee_inr": 2000, "bills_included": 100, "exceptions_included": 5})
         count = lambda *names: sum(1 for r in rows if r["outcome"] in names)
         recon = run.get("reconciliation")
-        rate = config["costs"]
-        allowance = {**config["limits"]}
-        if run.get("allowance_credits") is not None:
-            allowance["run_credits"] = run["allowance_credits"]
         return {
             "run_id": run["run_id"], "mode": run["mode"], "sandbox": config["sandbox_label"],
-            "allowance": allowance,
             "counts": {k: sum(1 for r in rows if r["outcome"] == k) for k in LABELS if any(r["outcome"] == k for r in rows)},
             "ready_total": total([r for r in rows if r["outcome"] == "ready"]),
             "held_total": total(held), "held": len(held),
@@ -172,20 +164,9 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
                 "with_owner": sum(1 for r in held if (r.get("decision") or {}).get("owner") and (r.get("decision") or {}).get("next_step")),
                 "bank_refs": len(refs), "distinct_bank_refs": len(set(refs)), "bills_signed": len(signed),
                 "double_debits": sum(1 for o in (recon or {}).get("open", []) if "double payment" in o["reason"]),
-                "kavach_cost_inr": inr, "fee_inr": offer["fee_inr"], "bills_included": offer["bills_included"],
-                "exceptions_included": offer["exceptions_included"],
                 "live_checks": [{"adapter": c["adapter"], "status": c["status"]} for c in run["calls"] if c["status"] == "ok"],
             },
             "posted": sum(1 for r in rows if r["outcome"] == "posted"),
-            "cost": {
-                "external_calls": len(run["calls"]), "crustdata_credits": round(credits, 2),
-                "usd": round(credits * rate["usd_per_credit"], 2),
-                "inr": inr,
-                "conversion": f"$1 = Rs {rate['inr_per_usd']} ({rate['rate_date']}); 1 credit = ${rate['usd_per_credit']}",
-                "model_spend": "None. No LLM is used: inputs are structured and rules decide.",
-                "sponsored": "Crustdata credits are hackathon-sponsored; costs shown at list price.",
-                "calls": run["calls"],
-            },
             "personal_data": {
                 "categories": ["carrier bank account numbers", "carrier names", "sender email addresses"] if run["mode"] == "pay_bills"
                               else ["bank statement descriptors", "vendor legal names"],
@@ -359,7 +340,8 @@ def create_app(db_path: Path, sources=None, today: date | None = None) -> FastAP
             "payment_files": run["files"],
             "rows": [{
                 "row_number": r["row_number"], "item_ref": r["item_ref"], "outcome": r["outcome"], "missing": r["missing"],
-                "display": r["display"], "decision": r["decision"], "evidence": r["evidence"], "posting": r["posting"],
+                "display": r["display"], "decision": r["decision"],
+                "evidence": [{k: v for k, v in ev.items() if k != "cost_credits"} for ev in r["evidence"]], "posting": r["posting"],
                 "payout": {k: r["payout"].get(k) for k in ("status", "reference_id", "file_id", "reconciled", "returned")} if r["payout"] else None,
                 "beneficiary_change": run["changes"].get(r["row_number"]),
             } for r in run["rows"]],

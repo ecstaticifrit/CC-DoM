@@ -13,11 +13,11 @@ def test_bank_change_with_mismatched_domain_corroborates_with_crustdata(client):
     assert any("bluedart.com" in ev["field_or_passage"] for ev in c104["evidence"])
 
     receipt = client.get(f"{run_url}/receipt.json").json()
-    adapters = [c["adapter"] for c in receipt["cost"]["calls"]]
-    assert "crustdata.company_identify" in adapters
-    crustdata = [c for c in receipt["cost"]["calls"] if c["adapter"].startswith("crustdata")]
-    assert receipt["cost"]["crustdata_credits"] == round(sum(c["cost_credits"] for c in receipt["cost"]["calls"]), 2) > 0
-    assert {c["adapter"] for c in crustdata} >= {"crustdata.company_identify", "crustdata.company_enrich", "crustdata.web_search_live"}
+    assert {c["adapter"] for c in receipt["this_run"]["live_checks"]} >= {
+        "crustdata.company_identify", "crustdata.company_enrich", "crustdata.web_search_live"}
+    for surface in (str(receipt), str(result), client.get(run_url).text):
+        for internal in ("cost_credits", "crustdata_credits", "sponsored", "kavach_cost_inr", "fee_inr", "Data checks cost"):
+            assert internal not in surface
 
 
 def test_no_statement_upload_until_a_payment_file_has_been_signed(client):
@@ -39,8 +39,7 @@ def test_lower_credit_allowance_blocks_new_paid_calls_while_independent_bills_fi
     assert outcomes["C-104"] == "hold_bank_change"
 
     receipt = client.get(f"{run_url}/receipt.json").json()
-    assert receipt["cost"]["crustdata_credits"] == 0.0
-    assert any(c["status"] == "budget_exceeded" for c in receipt["cost"]["calls"])
+    assert not any(c["adapter"].startswith("crustdata") for c in receipt["this_run"]["live_checks"])
 
 
 def test_budget_exhausted_on_lookalike_review_marks_cannot_verify_not_ready(client):

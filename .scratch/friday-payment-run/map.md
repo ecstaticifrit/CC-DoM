@@ -8,8 +8,8 @@
 
 ## Notes: active queue
 
-1. **#13 / #15 - Customer receipt and pricing copy.** Show bills reviewed, decisions, amounts and next actions. Remove internal spend, credits, conversion rates, sponsorship and the old package price from customer screens and downloads. Keep metering and budget enforcement internal. Do not invent a price or implement billing before the terms are set.
-2. **#02 / #04 - Product language.** Say suppliers and payment runs in general copy. Label carrier records as the logistics demo. No schedule or industry selector is needed.
+1. **Shipped: #13 / #15 freeze scope.** Customer pages and downloads exclude internal costs. Source evidence and internal metering remain. Per-bill pricing is stated without quoting a rate or charging.
+2. **Shipped: #02 / #04 positioning.** Supplier payment runs have no fixed schedule; logistics is the labeled demo. Existing carrier CSV headers remain compatible.
 3. **#14 / #16 - Rehearse and freeze.** Upload the sample, explain one hold, sign the clean bills, download the frozen file and reconcile its references on the same run. Verify privacy and the customer receipt. Keep demo evidence of internal costs separate.
 
 Keep the bank-file portions of #05, #06 and #08. The provider retry workflow in #07 is superseded; do not rebuild it. This map sets scope, not completion status.

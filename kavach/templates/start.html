@@ -6,8 +6,8 @@
   <li><span class="step-num">3</span>Sign the payment file</li>
 </ol>
 
-<h1>Start a carrier payment run</h1>
-<p class="lead">Upload the bills due this week. Kavach holds changed accounts and possible duplicates so the other carriers can be paid on time.</p>
+<h1>Start a payment run</h1>
+<p class="lead">Upload approved supplier bills when you're ready to pay. Review changed accounts and possible duplicates without delaying the rest.</p>
 
 {% if error %}
 <div class="banner banner-err" role="alert">
@@ -19,7 +19,7 @@
 <div class="start-grid">
   <form class="start-form" method="post" action="/runs" enctype="multipart/form-data">
     <div class="field-group">
-      <span class="field-label">Upload approved carrier bills (CSV)</span>
+      <span class="field-label">Upload approved supplier bills (CSV)</span>
       <label class="dropzone">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#12355B" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
         <span class="dropzone-title">Drop a CSV file here, or select one</span>
@@ -30,12 +30,11 @@
     </div>
 
     <div class="allowance-row">
-      <span><strong>Run allowance:</strong> {{ config.limits.run_seconds // 60 }} minutes</span>
-      <label>Credit limit <input class="allowance-input" type="number" name="run_credits" step="0.1" min="0" value="{{ config.limits.run_credits }}"></label>
+      <span>Pricing is per bill. No charges in this demo.</span>
       <span><strong>Mode:</strong> Sandbox, test data only</span>
     </div>
 
-    <button class="btn" type="submit">Review carrier bills</button>
+    <button class="btn" type="submit">Review bills</button>
   </form>
 
   <aside class="guide">
@@ -46,7 +45,7 @@
       <li>After payment, return to this run with the bank statement to confirm what cleared.</li>
     </ol>
 
-    <h2>Sample files</h2>
+    <h2>Logistics demo files</h2>
     <ul class="sample-links">
       <li><a href="/samples/friday_bills.csv" download>friday_bills.csv</a> — 5 bills: 3 clean, 1 bank account change, 1 possible duplicate</li>
       <li><a href="/samples/public_tariff_bills.csv" download>Speed Post tariff bills</a> — public prices and fictional payment details</li>

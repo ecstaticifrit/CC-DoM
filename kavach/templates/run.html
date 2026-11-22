@@ -4,7 +4,6 @@
 {% set has_receipt = receipt is defined %}
 {% set can_select = has_receipt and run.mode == "pay_bills" %}
 {% set labels = LABELS|default({"not_checked": "Not checked yet", "cannot_verify": "Cannot verify"}) %}
-{% set allowance = receipt.allowance if has_receipt else config.limits %}
 {% set fps = fps|default({}) %}
 {% set hold_groups = hold_groups|default([]) %}
 {% set contacts = contacts|default({}) %}
@@ -56,7 +55,6 @@
         {% if ev.url %}<a href="{{ ev.url }}" rel="noopener noreferrer" target="_blank">{{ ev.source_ref }}</a>{% else %}{{ ev.source_ref }}{% endif %}
         {% if ev.record_date %} · record dated {{ ev.record_date }}{% endif %}
         {% if ev.retrieved_at %} · retrieved {{ ev.retrieved_at }}{% endif %}
-        {% if ev.cost_credits %} · {{ ev.cost_credits }} credits{% endif %}
       </p>
     </details>
     {% endif %}
@@ -77,7 +75,6 @@
       <div class="run-meta">
         <span>Run <code>{{ run.run_id }}</code></span>
         <span>Rules <code>{{ run.rule_version }}</code></span>
-        <span>Allowance {{ allowance.run_seconds // 60 }} min, {{ allowance.run_credits }} credits</span>
         <span>Updated <time class="updated">{{ run.updated_at }}</time></span>
       </div>
     </div>
@@ -98,7 +95,6 @@
     <div class="summary-item is-ok"><dt>Posted once</dt><dd>{{ receipt.posted }} of {{ rows|length }}</dd></div>
     <div class="summary-item"><dt>Payments</dt><dd>None. This job only posts.</dd></div>
     {% endif %}
-    <div class="summary-item"><dt>Data checks cost</dt><dd>{{ receipt.cost.crustdata_credits }} credits · Rs {{ receipt.cost.inr }}</dd></div>
     {% else %}
     <div class="summary-item"><dt>Rows</dt><dd>{{ rows|length }}</dd></div>
     <div class="summary-item"><dt>Needs attention</dt><dd>{{ rows|selectattr("outcome", "equalto", "cannot_verify")|list|length }}</dd></div>
@@ -108,7 +104,7 @@
 
 {% if has_receipt %}
 {% set v = receipt.this_run %}
-{% set cd = namespace(n=0) %}{% for c in receipt.cost.calls or [] %}{% if c.adapter.startswith("crustdata") and c.status == "ok" %}{% set cd.n = cd.n + 1 %}{% endif %}{% endfor %}
+{% set cd = namespace(n=0) %}{% for c in v.live_checks %}{% if c.adapter.startswith("crustdata") %}{% set cd.n = cd.n + 1 %}{% endif %}{% endfor %}
 <section class="run-summary" aria-labelledby="summary-title">
   <h2 id="summary-title">What Kavach did in this run</h2>
   {% set total_rows = rows|length %}
@@ -138,7 +134,6 @@
     <li>{{ result_icon("warn") }}<span><strong>{{ receipt.held }} {{ "bill needs" if receipt.held == 1 else "bills need" }} your attention</strong> (Rs {{ v.held_total }}). Each one has an owner and a next step. Held money is not counted as savings.</span></li>
     {% endif %}
     <li>{{ result_icon("pass") }}<span><strong>Paid twice: {{ v.bank_refs - v.distinct_bank_refs + v.double_debits }}.</strong> {% if v.bills_signed %}{{ v.distinct_bank_refs }} bank reference{{ "s" if v.distinct_bank_refs != 1 }} for {{ v.bills_signed }} signed bill{{ "s" if v.bills_signed != 1 }}. Each bill is in exactly one payment-file line.{% else %}Nothing is signed yet.{% endif %}{% if v.double_debits %} The bank statement shows {{ v.double_debits }} double debit{{ "s" if v.double_debits != 1 }}.{% endif %}</span></li>
-    <li>{{ result_icon("info") }}<span>Data checks for this run cost <strong>Rs {{ v.kavach_cost_inr }}</strong>. The Kavach fee is Rs {{ "{:,}".format(v.fee_inr) }} a run for up to {{ v.bills_included }} bills, with {{ v.exceptions_included }} exceptions included.</span></li>
   </ul>
   {% else %}
   <ul class="summary-lines">
@@ -514,10 +509,10 @@
 
 {% if has_receipt %}
 <section class="receipt">
-  <h2>Run receipt: outcomes, cost and personal data</h2>
+  <h2>Run receipt</h2>
   <div class="receipt-grid">
     <div class="receipt-block">
-      <h3>Outcomes and cost</h3>
+      <h3>Payment outcomes</h3>
       <dl class="facts">
         <dt>Held</dt><dd>{{ receipt.held }} (Rs {{ receipt.held_total }})</dd>
         {% if run.mode == "pay_bills" %}
@@ -528,9 +523,6 @@
         {% else %}
         <dt>Posted</dt><dd>{{ receipt.posted }}</dd>
         {% endif %}
-        <dt>External calls</dt><dd>{{ receipt.cost.external_calls }} · {{ receipt.cost.crustdata_credits }} credits · ${{ receipt.cost.usd }} · <strong>Rs {{ receipt.cost.inr }}</strong></dd>
-        <dt>Conversion</dt><dd>{{ receipt.cost.conversion }}</dd>
-        <dt>Model spend</dt><dd>{{ receipt.cost.model_spend }}</dd>
       </dl>
     </div>
 
@@ -546,18 +538,6 @@
     </div>
   </div>
 
-  {% if receipt.cost.calls %}
-  <div class="table-wrap">
-    <table class="ledger calls">
-      <thead><tr><th scope="col">External call</th><th scope="col">Status</th><th scope="col" class="num">Credits</th></tr></thead>
-      <tbody>
-        {% for c in receipt.cost.calls %}
-        <tr><td><strong class="{% if c.adapter.startswith('crustdata') %}src src-crustdata{% endif %}">{{ c.adapter }}</strong><span class="subline"><code>{{ c.endpoint }}</code></span></td><td><span class="pill">{{ c.status }}</span></td><td class="num">{{ c.cost_credits }}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endif %}
 </section>
 {% endif %}
 {% endblock %}

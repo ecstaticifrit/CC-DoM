@@ -4,10 +4,10 @@ Ticket: `.scratch/friday-payment-run/issues/15-measure-pilot-offer.md`. Words fo
 
 ## 1. The offer
 
-**Rs 2,000 per weekly payment run of up to 100 bills.** The price includes evidence gathering and follow-up tracking for up to five exceptions.
+**Per bill, whenever a payment run is needed.** Agree the unit price and what counts as billable (including holds and repeat uploads) before a paid pilot. The demo does not charge.
 
 - Bank transfer fees are separate. The client's bank charges them directly.
-- Extra bills or exceptions are agreed in writing before the run. There is no charge per alert.
+- There is no charge per alert or external lookup.
 
 ## 2. Who does what
 
@@ -55,12 +55,7 @@ Values shown in examples are **illustrative** until a pilot fills them in.
 
 ## 5. Does the fee pay for itself?
 
-On labour alone, the fee must save this many staff-hours per run:
-
-| Loaded labour cost | Hours saved needed | Arithmetic |
-| --- | --- | --- |
-| Rs 250 per hour (AP staff) | **8 hours** | 2,000 ÷ 250 = 8 |
-| Rs 500 per hour (AP manager level) | **4 hours** | 2,000 ÷ 500 = 4 |
+On labour alone, break-even staff-hours = agreed per-bill price times billable bills divided by the client's loaded hourly labour cost.
 
 Both labour costs are illustrative. Basis checked 22 Nov 2026 (third-party salary sites): Glassdoor India average for accounts payable Rs 4.18 lakh per year (about Rs 209 per hour at 2,000 hours, before overhead); PayScale median for AP manager Rs 9.36 lakh per year (about Rs 468 per hour).
 
