@@ -50,6 +50,13 @@ class Store:
                 con.execute("ALTER TABLE runs ADD COLUMN input_hash TEXT")
             if "allowance_credits" not in cols:
                 con.execute("ALTER TABLE runs ADD COLUMN allowance_credits REAL")
+            row_cols = {r["name"] for r in con.execute("PRAGMA table_info(rows)")}
+            if "evidence_json" not in row_cols:
+                con.execute("ALTER TABLE rows ADD COLUMN evidence_json TEXT NOT NULL DEFAULT '[]'")
+            if "decision_json" not in row_cols:
+                con.execute("ALTER TABLE rows ADD COLUMN decision_json TEXT NOT NULL DEFAULT '{}'")
+            if "posting_json" not in row_cols:
+                con.execute("ALTER TABLE rows ADD COLUMN posting_json TEXT")
 
     def _connect(self) -> sqlite3.Connection:
         con = sqlite3.connect(self.path, timeout=5)
@@ -69,11 +76,13 @@ class Store:
         run_id = "run_" + uuid.uuid4().hex[:12]
         stamp = now()
         with self._connect() as con:
-            con.execute("INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?)",
+            con.execute("INSERT INTO runs (run_id, mode, rule_version, created_at, updated_at, input_hash, allowance_credits) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (run_id, mode, rule_version, stamp, stamp, input_hash, allowance_credits))
             for r in rows:
                 con.execute(
-                    "INSERT INTO rows VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO rows (run_id, row_number, item_ref, outcome, missing_json, display_json, "
+                    "raw_json, evidence_json, decision_json, posting_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (run_id, r["row_number"], r["item_ref"], r["outcome"], json.dumps(r["missing"]),
                      json.dumps(r["display"]), json.dumps(r["raw"]), json.dumps(r.get("evidence", [])),
                      json.dumps(r.get("decision", {})), json.dumps(r["posting"]) if r.get("posting") else None),
