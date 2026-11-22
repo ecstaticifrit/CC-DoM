@@ -1,0 +1,21 @@
+:root{--ink:#192e39;--paper:#faf8f1;--line:#c3c9bf;--teal:#08605c;--ochre:#8a4510;color:var(--ink);font:16px/1.5 "Avenir Next","Trebuchet MS",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(115deg,#e2ece6,transparent 45%),var(--paper);min-height:100vh}
+header,main{max-width:1120px;margin:auto;padding:20px clamp(18px,5vw,64px)}
+header{display:flex;align-items:center;gap:18px;border-bottom:1px solid var(--line)}header small{margin-left:auto}
+.brand{font: bold 24px Georgia,serif}.brand span{color:var(--teal)}main{padding-top:48px;padding-bottom:100px}
+.eyebrow,small,.stamp,nav{font:600 11px/1.6 Menlo,Consolas,monospace;letter-spacing:.08em}.eyebrow{color:var(--teal)}
+h1,h2,h3,p{margin:0 0 12px}h1{font:clamp(40px,7vw,74px)/1.04 Georgia,serif;letter-spacing:-.06em;margin:16px 0}
+h2{font:32px/1.12 Georgia,serif}h3{font-size:17px}.lead{max-width:62ch;color:#465d64}
+.tools,.actions{display:flex;flex-wrap:wrap;gap:9px;margin:18px 0}.tools{align-items:center;border-block:1px solid var(--line);padding:12px 0}
+button{font:inherit;font-weight:600;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:8px 14px;cursor:pointer}
+button:hover{border-color:var(--teal)}button:focus-visible{outline:3px solid #e38625;outline-offset:2px}.primary{color:white;background:var(--teal);border-color:var(--teal)}
+.grid{display:grid;grid-template-columns:1.45fr 1fr;gap:16px}.card,aside,dialog{background:#fffef8;border:1px solid var(--line);border-radius:8px;padding:24px}
+.hero{background:var(--ink);color:var(--paper);border-left:6px solid #8ad3b5}.hero h2{font-size:clamp(36px,5vw,58px);margin:16px 0}.hero .primary{background:#c2edd7;color:var(--ink)}
+.warn{color:var(--ochre)}.pill{display:inline-block;background:#e5ede8;color:var(--teal);border-radius:3px;padding:2px 7px;font-size:13px}.pill.warn{background:#ffebd3;color:var(--ochre)}
+.row{display:grid;align-items:center;grid-template-columns:1.5fr 1fr 1fr auto;gap:10px;padding:13px 0;border-bottom:1px solid var(--line)}.row b small{display:block;font-weight:400}
+.inbox{border-left:4px solid #b86e31}.item{margin-top:15px;padding-top:14px;border-top:1px solid var(--line)}.ledger{border-top:3px solid var(--ink);margin-top:20px}
+#notice{margin-top:24px;padding:12px 15px;background:#e7eee7;border-left:3px solid var(--teal)}footer{font-size:13px;color:#546060}
+nav{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:5px;background:var(--ink);color:white;border-radius:8px;white-space:nowrap;box-shadow:0 3px 18px #21352d33}nav button{padding:4px 12px}
+dialog{color:var(--ink);max-width:min(520px,94vw);width:100%;max-height:88vh;overflow:auto;box-shadow:0 12px 65px #10282133}dialog::backdrop{background:#142b37aa}
+dialog h2{margin:8px 0 16px}dialog button{margin:4px}.amt{font-variant-numeric:tabular-nums}
+@media(max-width:700px){main{padding-top:26px}.grid{grid-template-columns:1fr}.row{grid-template-columns:1.5fr 1fr}.card,aside{padding:18px}header{gap:10px}.tools button{font-size:14px}}
